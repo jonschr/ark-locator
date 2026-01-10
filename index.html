@@ -5,38 +5,243 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta
 			http-equiv="Content-Security-Policy"
-			content="default-src 'self'; script-src 'self'"
+			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://r2.wikily.gg data:"
 		/>
 		<title>Ark Locator</title>
-		<style>
-			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-					Roboto, Helvetica, Arial, sans-serif;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				height: 100vh;
-				margin: 0;
-				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-				color: white;
-			}
-			.container {
-				text-align: center;
-			}
-			h1 {
-				font-size: 3rem;
-				margin-bottom: 0.5rem;
-			}
-			p {
-				font-size: 1.2rem;
-				opacity: 0.9;
-			}
-		</style>
+		<link rel="stylesheet" href="styles.css" />
 	</head>
 	<body>
-		<div class="container">
-			<h1>Hello World!</h1>
-			<p>Welcome to Ark Locator</p>
+		<div class="app-container">
+			<!-- Collapsible Sidebar -->
+			<aside id="sidebar" class="sidebar">
+				<div class="sidebar-header">
+					<h1>🦖 Ark Locator</h1>
+					<button
+						id="toggle-sidebar"
+						class="toggle-btn"
+						title="Toggle Sidebar"
+					>
+						◀
+					</button>
+				</div>
+
+				<div class="sidebar-content">
+					<!-- Map Selection -->
+					<section class="sidebar-section">
+						<h3>🗺️ Select Map</h3>
+						<select id="map-select" class="map-select">
+							<option value="island">The Island</option>
+							<option value="scorched-earth">
+								Scorched Earth
+							</option>
+							<option value="aberration">Aberration</option>
+							<option value="extinction">Extinction</option>
+							<option value="the-center">The Center</option>
+							<option value="ragnarok">Ragnarok</option>
+							<option value="valguero">Valguero</option>
+							<option value="genesis-1">Genesis: Part 1</option>
+							<option value="crystal-isles">Crystal Isles</option>
+							<option value="genesis-2">Genesis: Part 2</option>
+							<option value="lost-island">Lost Island</option>
+							<option value="fjordur">Fjordur</option>
+							<option value="astraeos">Astraeos</option>
+						</select>
+					</section>
+
+					<!-- Marker Categories -->
+					<section class="sidebar-section">
+						<h3>📍 Marker Categories</h3>
+						<div id="category-list" class="category-list"></div>
+						<button
+							id="add-category-btn"
+							class="btn btn-small btn-secondary"
+						>
+							+ Add Category
+						</button>
+					</section>
+
+					<!-- Waypoint Lists -->
+					<section class="sidebar-section">
+						<h3>📋 Waypoints</h3>
+						<div class="waypoint-stats">
+							<span id="waypoint-count">0 markers</span>
+						</div>
+						<div id="waypoint-list" class="waypoint-list">
+							<p class="empty-state">
+								Click on the map to add markers
+							</p>
+						</div>
+					</section>
+
+					<!-- Import/Export -->
+					<section class="sidebar-section collapsible">
+						<h3 class="collapsible-header">
+							<span>💾 Import / Export</span>
+							<span class="collapse-icon">▼</span>
+						</h3>
+						<div class="collapsible-content">
+							<div class="file-path-row">
+								<input
+									type="text"
+									id="file-path"
+									placeholder="ARK waypoints file..."
+									readonly
+								/>
+								<button
+									id="browse-btn"
+									class="btn btn-icon"
+									title="Browse"
+								>
+									📁
+								</button>
+							</div>
+							<div class="btn-group">
+								<button
+									id="import-btn"
+									class="btn btn-small btn-secondary"
+									disabled
+								>
+									Import
+								</button>
+								<button
+									id="export-btn"
+									class="btn btn-small btn-primary"
+								>
+									Export JSON
+								</button>
+							</div>
+							<div id="io-status" class="status-message"></div>
+						</div>
+					</section>
+				</div>
+			</aside>
+
+			<!-- Main Map Area -->
+			<main class="map-container">
+				<div id="map-viewport" class="map-viewport">
+					<img
+						id="map-image"
+						src=""
+						alt="ARK Map"
+						class="map-image"
+					/>
+					<div id="markers-layer" class="markers-layer"></div>
+					<div id="coords-display" class="coords-display">
+						Lat: --, Lon: --
+					</div>
+				</div>
+
+				<!-- Map Controls -->
+				<div class="map-controls">
+					<button
+						id="refresh-btn"
+						class="map-ctrl-btn map-ctrl-btn-small"
+						title="Reload App"
+					>
+						↻
+					</button>
+					<button id="zoom-in" class="map-ctrl-btn" title="Zoom In">
+						+
+					</button>
+					<button id="zoom-out" class="map-ctrl-btn" title="Zoom Out">
+						−
+					</button>
+					<button
+						id="zoom-reset"
+						class="map-ctrl-btn"
+						title="Reset View"
+					>
+						⟲
+					</button>
+				</div>
+
+				<!-- No Map Message -->
+				<div id="no-map-message" class="no-map-message hidden">
+					<p>🗺️ Map image not available for this map</p>
+					<p class="sub">
+						Select a different map or add your own map images
+					</p>
+				</div>
+
+				<!-- Controls Help -->
+				<div class="controls-help">
+					<span>🖱️ Click: Add marker</span>
+					<span>🖱️ Middle/Right drag: Pan</span>
+					<span>⚙️ Scroll: Zoom</span>
+					<span>⌨️ Space+drag: Pan</span>
+				</div>
+			</main>
 		</div>
+
+		<!-- Add Marker Modal -->
+		<div id="marker-modal" class="modal hidden">
+			<div class="modal-content">
+				<h3 id="marker-modal-title">Add Marker</h3>
+				<div class="form-group">
+					<label for="marker-name">Name</label>
+					<input
+						type="text"
+						id="marker-name"
+						placeholder="Marker name..."
+					/>
+				</div>
+				<div class="form-group">
+					<label for="marker-category">Category</label>
+					<select id="marker-category"></select>
+				</div>
+				<div class="form-group">
+					<label>Coordinates</label>
+					<div class="coords-row">
+						<input type="number" id="marker-lat" step="0.1" />
+						<input type="number" id="marker-lon" step="0.1" />
+					</div>
+				</div>
+				<div class="modal-actions">
+					<button
+						id="delete-marker-btn"
+						class="btn btn-danger hidden"
+					>
+						Delete
+					</button>
+					<div class="modal-actions-right">
+						<button id="cancel-marker" class="btn btn-secondary">
+							Cancel
+						</button>
+						<button id="save-marker" class="btn btn-primary">
+							Save Marker
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Add Category Modal -->
+		<div id="category-modal" class="modal hidden">
+			<div class="modal-content">
+				<h3>Add Category</h3>
+				<div class="form-group">
+					<label for="category-name">Category Name</label>
+					<input
+						type="text"
+						id="category-name"
+						placeholder="e.g., Base Locations"
+					/>
+				</div>
+				<div class="form-group">
+					<label for="category-color">Color</label>
+					<input type="color" id="category-color" value="#00d9ff" />
+				</div>
+				<div class="modal-actions">
+					<button id="cancel-category" class="btn btn-secondary">
+						Cancel
+					</button>
+					<button id="save-category" class="btn btn-primary">
+						Save Category
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<script src="renderer.js"></script>
 	</body>
 </html>
