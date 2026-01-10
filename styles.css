@@ -1,0 +1,273 @@
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+	min-height: 100vh;
+	color: #e0e0e0;
+}
+
+.app-container {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 20px;
+}
+
+header {
+	text-align: center;
+	padding: 30px 0;
+}
+
+header h1 {
+	font-size: 2.5rem;
+	color: #00d9ff;
+	text-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+	margin-bottom: 10px;
+}
+
+header .subtitle {
+	color: #888;
+	font-size: 1.1rem;
+}
+
+.card {
+	background: rgba(255, 255, 255, 0.05);
+	border-radius: 12px;
+	padding: 24px;
+	margin-bottom: 20px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	backdrop-filter: blur(10px);
+}
+
+.card h2 {
+	font-size: 1.3rem;
+	color: #00d9ff;
+	margin-bottom: 15px;
+}
+
+.card .description {
+	color: #888;
+	margin-bottom: 15px;
+	font-size: 0.95rem;
+}
+
+/* File Path Section */
+.file-path-container {
+	display: flex;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.file-path-container input {
+	flex: 1;
+	padding: 12px 15px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	background: rgba(0, 0, 0, 0.3);
+	color: #e0e0e0;
+	font-size: 0.9rem;
+}
+
+.file-path-container input::placeholder {
+	color: #666;
+}
+
+/* Buttons */
+.btn {
+	padding: 12px 24px;
+	border: none;
+	border-radius: 8px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn-primary {
+	background: linear-gradient(135deg, #00d9ff 0%, #0099cc 100%);
+	color: #000;
+}
+
+.btn-primary:hover:not(:disabled) {
+	transform: translateY(-2px);
+	box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+}
+
+.btn-secondary {
+	background: rgba(255, 255, 255, 0.1);
+	color: #e0e0e0;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-danger {
+	background: rgba(255, 82, 82, 0.2);
+	color: #ff5252;
+	border: 1px solid rgba(255, 82, 82, 0.3);
+}
+
+.btn-danger:hover:not(:disabled) {
+	background: rgba(255, 82, 82, 0.3);
+}
+
+.btn-small {
+	padding: 8px 16px;
+	font-size: 0.85rem;
+}
+
+/* Status Messages */
+.status-message {
+	margin-top: 10px;
+	padding: 10px 15px;
+	border-radius: 6px;
+	font-size: 0.9rem;
+	display: none;
+}
+
+.status-message.success {
+	display: block;
+	background: rgba(76, 175, 80, 0.2);
+	border: 1px solid rgba(76, 175, 80, 0.3);
+	color: #4caf50;
+}
+
+.status-message.error {
+	display: block;
+	background: rgba(255, 82, 82, 0.2);
+	border: 1px solid rgba(255, 82, 82, 0.3);
+	color: #ff5252;
+}
+
+.status-message.info {
+	display: block;
+	background: rgba(0, 217, 255, 0.1);
+	border: 1px solid rgba(0, 217, 255, 0.2);
+	color: #00d9ff;
+}
+
+/* Waypoints Section */
+.waypoint-controls {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 15px;
+}
+
+#waypoint-count {
+	color: #888;
+	font-size: 0.9rem;
+}
+
+.waypoints-list {
+	max-height: 300px;
+	overflow-y: auto;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 8px;
+	background: rgba(0, 0, 0, 0.2);
+}
+
+.waypoints-list .empty-state {
+	text-align: center;
+	padding: 40px;
+	color: #666;
+}
+
+.waypoint-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 15px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.waypoint-item:last-child {
+	border-bottom: none;
+}
+
+.waypoint-item .name {
+	font-weight: 500;
+	color: #e0e0e0;
+}
+
+.waypoint-item .coords {
+	color: #888;
+	font-size: 0.85rem;
+	font-family: monospace;
+}
+
+.waypoint-item .category {
+	background: rgba(0, 217, 255, 0.1);
+	color: #00d9ff;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 0.8rem;
+}
+
+/* Export Section */
+.export-controls {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.export-controls input {
+	padding: 12px 15px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px 0 0 8px;
+	background: rgba(0, 0, 0, 0.3);
+	color: #e0e0e0;
+	font-size: 0.9rem;
+	width: 200px;
+}
+
+.export-controls .file-ext {
+	padding: 12px 15px;
+	background: rgba(0, 0, 0, 0.4);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-left: none;
+	border-radius: 0 8px 8px 0;
+	color: #666;
+}
+
+.export-controls .btn {
+	margin-left: 15px;
+}
+
+/* Footer */
+footer {
+	text-align: center;
+	padding: 20px;
+	color: #666;
+	font-size: 0.85rem;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+	width: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: rgba(0, 0, 0, 0.2);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
