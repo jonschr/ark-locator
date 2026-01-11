@@ -293,6 +293,15 @@ npm run dist
 - Ensure tag format is `v{major}.{minor}.{patch}`
 - Push tag to remote: `git push origin v0.2.1`
 
+**Build fails on Ubuntu/Linux**
+- **Cause**: Missing system dependencies for electron-builder
+- **Solution**: The workflow now installs required packages automatically
+- **Manual fix**: If building locally on Linux, install dependencies:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2 libgtk-3-0 libx11-xcb1 libxcb-dri3-0 libxcb-dri3-dev fuse
+  ```
+
 **Build fails on specific platform**
 - Check GitHub Actions logs
 - Verify Node.js compatibility
