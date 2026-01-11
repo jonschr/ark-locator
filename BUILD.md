@@ -16,7 +16,7 @@ This document covers all aspects of building, testing, and distributing the ARK 
 
 ### Prerequisites
 
--   **Node.js**: v16 or higher (v18 recommended)
+- **Node.js**: v20 (recommended for better compatibility)
 -   **Git**: For version control
 -   **Code Editor**: VS Code recommended with Electron extensions
 
@@ -187,9 +187,9 @@ The workflow builds on three platforms simultaneously:
 #### Workflow Steps
 
 1. **Checkout code** from the tagged commit
-2. **Setup Node.js** v18 with npm caching
+2. **Setup Node.js** v20 with npm caching
 3. **Install dependencies** using `npm ci`
-4. **Build distributables** using `npm run dist`
+4. **Build distributables** using `npx electron-builder --publish=never`
 5. **Upload artifacts** for each platform
 
 #### Environment Variables
