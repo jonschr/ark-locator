@@ -10,7 +10,7 @@
 		"publish": "electron-builder --publish=always"
 	},
 	"keywords": [],
-	"author": "",
+	"author": "Jon Schroeder <jon@elod.in>",
 	"license": "ISC",
 	"devDependencies": {
 		"electron": "^27.3.11",
