@@ -709,21 +709,6 @@ function zoomMap(factor, mouseX = null, mouseY = null) {
 			mapOffsetY *= factor;
 		}
 
-		// Clamp offset to keep image visible within viewport
-		const rect = mapViewport.getBoundingClientRect();
-		const centerX = rect.width / 2;
-		const centerY = rect.height / 2;
-		const imgWidth = mapImage.naturalWidth;
-		const imgHeight = mapImage.naturalHeight;
-		const scaledHalfWidth = (imgWidth / 2) * newScale;
-		const scaledHalfHeight = (imgHeight / 2) * newScale;
-		const minOffsetX = -centerX + scaledHalfWidth;
-		const maxOffsetX = rect.width - centerX - scaledHalfWidth;
-		const minOffsetY = -centerY + scaledHalfHeight;
-		const maxOffsetY = rect.height - centerY - scaledHalfHeight;
-		mapOffsetX = Math.max(minOffsetX, Math.min(maxOffsetX, mapOffsetX));
-		mapOffsetY = Math.max(minOffsetY, Math.min(maxOffsetY, mapOffsetY));
-
 		mapScale = newScale;
 		updateMapTransform();
 		// Use requestAnimationFrame to sync marker updates with transform
