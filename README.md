@@ -9,7 +9,7 @@ An Electron-based application for managing ARK: Survival Evolved waypoints and m
 1. **Download the app:**
 
     - Go to [Releases](https://github.com/jonschr/ark-locator/releases)
-    - Download the installer for your platform (.exe for Windows, .dmg for macOS)
+    - Download the Windows installer (.exe)
     - Run the installer and follow the setup wizard
 
 2. **Launch the app:**
@@ -23,13 +23,6 @@ An Electron-based application for managing ARK: Survival Evolved waypoints and m
 1. Download and extract the ZIP from [GitHub](https://github.com/jonschr/ark-locator)
 2. Double-click `setup.bat` and wait for it to complete
 3. Double-click `run.bat` to start the app
-
-#### macOS Users:
-
-1. Download and extract the ZIP from [GitHub](https://github.com/jonschr/ark-locator)
-2. Open Terminal in the extracted folder
-3. Run: `./setup.sh`
-4. Run: `./run.sh` or `npm start`
 
 ## 📋 Manual Setup (Advanced)
 
@@ -68,7 +61,7 @@ npm start
 
 -   `npm start` - Start the development version
 -   `npm run restart` - Kill existing instances and restart
--   `npm run dist` - Build distributable packages for all platforms
+-   `npm run dist` - Build distributable packages for Windows
 -   `npm run publish` - Build and publish to GitHub releases
 
 ### Project Structure

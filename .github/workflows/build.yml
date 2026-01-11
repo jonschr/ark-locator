@@ -11,7 +11,7 @@ jobs:
 
         strategy:
             matrix:
-                os: [macos-latest, windows-latest]
+                os: [windows-latest]
 
         steps:
             - name: Checkout code
@@ -37,22 +37,19 @@ jobs:
               with:
                   tag_name: ${{ github.ref_name }}
                   body: |
-                    ## Downloads
+                      ## Downloads
 
-                    ### Windows
-                    - **[ARK Locator Setup ${{ github.ref_name }}.exe](https://github.com/jonschr/ark-locator/releases/download/${{ github.ref_name }}/ARK%20Locator%20Setup%20${{ github.ref_name }}.exe)** - Windows installer
+                      ### Windows
+                      - **[ARK Locator Setup ${{ github.ref_name }}.exe](https://github.com/jonschr/ark-locator/releases/download/${{ github.ref_name }}/ARK%20Locator%20Setup%20${{ github.ref_name }}.exe)** - Windows installer
 
-                    ### macOS
-                    - **[ARK Locator ${{ github.ref_name }}-arm64.dmg](https://github.com/jonschr/ark-locator/releases/download/${{ github.ref_name }}/ARK%20Locator-${{ github.ref_name }}-arm64.dmg)** - macOS installer
+                      ## Installation
 
-                    ## Installation
+                      1. Download the installer for your platform above
+                      2. Run the installer and follow the setup wizard
+                      3. Launch ARK Locator from your applications menu
 
-                    1. Download the installer for your platform above
-                    2. Run the installer and follow the setup wizard
-                    3. Launch ARK Locator from your applications menu
+                      ## What's New
 
-                    ## What's New
-
-                    See the changelog for details about this release.
+                      See the changelog for details about this release.
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

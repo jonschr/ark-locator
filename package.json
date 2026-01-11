@@ -1,6 +1,6 @@
 {
 	"name": "ark-locator",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"description": "Ark Locator Electron App",
 	"main": "main.js",
 	"scripts": {
@@ -29,9 +29,6 @@
 			"provider": "github",
 			"owner": "jonschr",
 			"repo": "ark-locator"
-		},
-		"mac": {
-			"category": "public.app-category.utilities"
 		},
 		"win": {
 			"target": "nsis"
