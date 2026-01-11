@@ -70,7 +70,17 @@ const DEFAULT_CATEGORIES = [
 // Per-map category overrides { mapName: { categoryId: { name?, color?, visible? }, ... }, mapName: { _custom: [custom categories] } }
 let mapCategories = {};
 
-// Get categories for the current map (merges defaults with map-specific overrides)
+// Virtual category for uncategorized markers (not stored, just for display)
+const UNCATEGORIZED_DISPLAY = {
+	id: null,
+	name: 'Uncategorized',
+	color: '#888888',
+	icon: null,
+	visible: true,
+};
+
+// Get ALL categories for the current map (presets + user categories)
+// Used for rendering the sidebar waypoint list
 function getCategories() {
 	const mapOverrides = mapCategories[currentMap] || {};
 	const customCats = mapOverrides._custom || [];
@@ -86,6 +96,16 @@ function getCategories() {
 
 	// Custom categories first, then default categories
 	return [...customCats, ...merged];
+}
+
+// Get only USER categories for the marker dropdown (excludes preset categories)
+// Used when adding/editing custom markers
+function getUserCategories() {
+	const mapOverrides = mapCategories[currentMap] || {};
+	const customCats = mapOverrides._custom || [];
+
+	// Always include Uncategorized as the first option (represents null category)
+	return [UNCATEGORIZED_DISPLAY, ...customCats];
 }
 
 // Update a category for the current map
@@ -112,6 +132,17 @@ function updateCategory(categoryId, updates) {
 	saveState();
 }
 
+// Check if a category is a user/custom category (not a preset category)
+function isUserCategory(categoryId) {
+	// Uncategorized (null) is a user category
+	if (!categoryId) return true;
+
+	// Check if it's in the _custom array
+	const mapOverrides = mapCategories[currentMap] || {};
+	const customCats = mapOverrides._custom || [];
+	return customCats.some((c) => c.id === categoryId);
+}
+
 // Add a custom category for the current map
 function addCustomCategory(category) {
 	if (!mapCategories[currentMap]) {
@@ -124,7 +155,7 @@ function addCustomCategory(category) {
 	saveState();
 }
 
-let selectedCategory = 'default';
+let selectedCategory = ''; // Empty string for uncategorized
 let pendingMarker = null;
 let editingMarkerIndex = null; // Track if we're editing an existing marker (user markers only)
 let editingPresetIndex = null; // Track if we're editing a preset marker
@@ -235,6 +266,8 @@ const markerModal = document.getElementById('marker-modal');
 const markerModalTitle = document.getElementById('marker-modal-title');
 const markerNameInput = document.getElementById('marker-name');
 const markerCategorySelect = document.getElementById('marker-category');
+const newCategoryInput = document.getElementById('new-category-input');
+const toggleNewCategoryBtn = document.getElementById('toggle-new-category');
 const markerLatInput = document.getElementById('marker-lat');
 const markerLonInput = document.getElementById('marker-lon');
 const cancelMarkerBtn = document.getElementById('cancel-marker');
@@ -247,11 +280,21 @@ const categoryNameInput = document.getElementById('category-name');
 const categoryColorInput = document.getElementById('category-color');
 const cancelCategoryBtn = document.getElementById('cancel-category');
 const saveCategoryBtn = document.getElementById('save-category');
+const deleteCategoryBtn = document.getElementById('delete-category');
 let editingCategoryId = null; // Track if editing an existing category
 
 const helpModal = document.getElementById('help-modal');
 const helpBtn = document.getElementById('help-btn');
 const closeHelpBtn = document.getElementById('close-help');
+
+// INI modal elements
+const iniModal = document.getElementById('ini-modal');
+const iniModalTitle = document.getElementById('ini-modal-title');
+const iniModalMessage = document.getElementById('ini-modal-message');
+const closeIniModalBtn = document.getElementById('close-ini-modal');
+
+// Import from ARK button
+const importArkBtn = document.getElementById('import-ark-btn');
 
 // Collapsible sections
 document.querySelectorAll('.collapsible-header').forEach((header) => {
@@ -311,6 +354,7 @@ function setupEventListeners() {
 	addCategoryBtn.addEventListener('click', openCategoryModal);
 	cancelCategoryBtn.addEventListener('click', closeCategoryModal);
 	saveCategoryBtn.addEventListener('click', saveCategory);
+	deleteCategoryBtn.addEventListener('click', deleteCurrentCategory);
 
 	// Show all / Hide all category visibility
 	document.getElementById('show-all-btn').addEventListener('click', () => {
@@ -325,6 +369,26 @@ function setupEventListeners() {
 	saveMarkerBtn.addEventListener('click', saveMarker);
 	deleteMarkerBtn.addEventListener('click', deleteCurrentMarker);
 
+	// Toggle new category input in marker modal
+	toggleNewCategoryBtn.addEventListener('click', () => {
+		const showingInput = newCategoryInput.style.display !== 'none';
+		if (showingInput) {
+			// Switch back to select
+			newCategoryInput.style.display = 'none';
+			markerCategorySelect.style.display = '';
+			toggleNewCategoryBtn.textContent = '+';
+			toggleNewCategoryBtn.title = 'Create new category';
+			newCategoryInput.value = '';
+		} else {
+			// Switch to input for new category
+			markerCategorySelect.style.display = 'none';
+			newCategoryInput.style.display = '';
+			toggleNewCategoryBtn.textContent = '×';
+			toggleNewCategoryBtn.title = 'Cancel new category';
+			newCategoryInput.focus();
+		}
+	});
+
 	// Help modal
 	helpBtn.addEventListener('click', () =>
 		helpModal.classList.remove('hidden')
@@ -334,6 +398,20 @@ function setupEventListeners() {
 	);
 	helpModal.addEventListener('click', (e) => {
 		if (e.target === helpModal) helpModal.classList.add('hidden');
+	});
+
+	// INI modal
+	closeIniModalBtn.addEventListener('click', closeIniModal);
+	iniModal.addEventListener('click', (e) => {
+		if (e.target === iniModal) closeIniModal();
+	});
+
+	// Import from ARK button
+	importArkBtn.addEventListener('click', () => {
+		showIniModal(
+			'Import All Markers from ARK',
+			'This will read your ARK game .ini file and import all waypoints/map markers into this app.'
+		);
 	});
 
 	// Clear data button
@@ -678,9 +756,19 @@ function renderMapMarkers() {
 	const categories = getCategories();
 
 	allMarkers.forEach((marker, index) => {
-		const category = categories.find((c) => c.id === marker.category);
-		// Skip if category is hidden
-		if (!category || !category.visible) return;
+		// Handle uncategorized markers (no category)
+		let category;
+		let markerColor = '#888888'; // Default gray for uncategorized
+		
+		if (!marker.category) {
+			// Uncategorized marker - always visible unless individually hidden
+			category = UNCATEGORIZED_DISPLAY;
+		} else {
+			category = categories.find((c) => c.id === marker.category);
+			// Skip if category is hidden
+			if (!category || !category.visible) return;
+		}
+		
 		// Skip if individual marker is hidden
 		if (isMarkerHidden(marker.id)) return;
 
@@ -797,16 +885,17 @@ function highlightWaypoint(markerId) {
 // CATEGORIES
 // ===========================================
 function updateCategorySelect() {
-	// Update marker category select dropdown
-	const categories = getCategories();
+	// Update marker category select dropdown - only show user categories, not presets
+	const categories = getUserCategories();
 	markerCategorySelect.innerHTML = categories
-		.map((cat) => `<option value="${cat.id}">${cat.name}</option>`)
+		.map((cat) => `<option value="${cat.id || ''}">${cat.name}</option>`)
 		.join('');
 }
 
 function getMarkerCountForCategory(categoryId) {
 	const allMarkers = getAllMarkers(currentMap);
-	return allMarkers.filter((m) => m.category === categoryId).length;
+	// Handle null/undefined category matching
+	return allMarkers.filter((m) => (m.category || null) === (categoryId || null)).length;
 }
 
 function toggleAllCategoriesVisibility(visible) {
@@ -819,8 +908,11 @@ function toggleAllCategoriesVisibility(visible) {
 }
 
 function openCategoryModal() {
+	editingCategoryId = null;
+	categoryModalTitle.textContent = 'Add Category';
 	categoryNameInput.value = '';
 	categoryColorInput.value = '#00d9ff';
+	deleteCategoryBtn.classList.add('hidden');
 	categoryModal.classList.remove('hidden');
 }
 
@@ -833,6 +925,14 @@ function openEditCategoryModal(categoryId) {
 	categoryModalTitle.textContent = 'Edit Category';
 	categoryNameInput.value = cat.name;
 	categoryColorInput.value = cat.color;
+	
+	// Only show delete button for user categories (not preset categories)
+	if (isUserCategory(categoryId)) {
+		deleteCategoryBtn.classList.remove('hidden');
+	} else {
+		deleteCategoryBtn.classList.add('hidden');
+	}
+	
 	categoryModal.classList.remove('hidden');
 }
 
@@ -840,6 +940,58 @@ function closeCategoryModal() {
 	categoryModal.classList.add('hidden');
 	editingCategoryId = null;
 	categoryModalTitle.textContent = 'Add Category';
+	deleteCategoryBtn.classList.add('hidden');
+}
+
+// Delete the currently editing category
+function deleteCurrentCategory() {
+	if (!editingCategoryId) return;
+	
+	const categories = getCategories();
+	const cat = categories.find((c) => c.id === editingCategoryId);
+	const markerCount = getMarkerCountForCategory(editingCategoryId);
+	
+	let confirmMsg = `Are you sure you want to delete the "${cat?.name || editingCategoryId}" category?`;
+	if (markerCount > 0) {
+		confirmMsg += `\n\nThis category has ${markerCount} marker(s). They will be moved to "Uncategorized".`;
+	}
+	
+	if (!confirm(confirmMsg)) return;
+	
+	// Move markers to uncategorized
+	if (markerCount > 0) {
+		const mapMarkers = userMarkers[currentMap] || [];
+		mapMarkers.forEach((marker) => {
+			if (marker.category === editingCategoryId) {
+				marker.category = 'uncategorized';
+			}
+		});
+	}
+	
+	// Remove from custom categories
+	const mapOverrides = mapCategories[currentMap] || {};
+	const customCats = mapOverrides._custom || [];
+	const customIndex = customCats.findIndex((c) => c.id === editingCategoryId);
+	if (customIndex >= 0) {
+		customCats.splice(customIndex, 1);
+	}
+	
+	saveState();
+	updateCategorySelect();
+	renderMapMarkers();
+	renderWaypoints();
+	closeCategoryModal();
+}
+
+// INI Modal functions
+function showIniModal(title, message) {
+	iniModalTitle.textContent = title;
+	iniModalMessage.textContent = message;
+	iniModal.classList.remove('hidden');
+}
+
+function closeIniModal() {
+	iniModal.classList.add('hidden');
 }
 
 function saveCategory() {
@@ -872,6 +1024,10 @@ function renderWaypoints() {
 
 	// Count only visible markers (category visible AND marker not individually hidden)
 	const visibleMarkers = allMarkers.filter((marker) => {
+		// Uncategorized markers are always visible (if not individually hidden)
+		if (!marker.category) {
+			return !isMarkerHidden(marker.id);
+		}
 		const category = categories.find((c) => c.id === marker.category);
 		if (!category || !category.visible) return false;
 		if (isMarkerHidden(marker.id)) return false;
@@ -890,16 +1046,80 @@ function renderWaypoints() {
 
 	// Group markers by category
 	const markersByCategory = {};
+	const uncategorizedMarkers = [];
 	allMarkers.forEach((marker, index) => {
-		const catId = marker.category || 'default';
-		if (!markersByCategory[catId]) {
-			markersByCategory[catId] = [];
+		if (!marker.category) {
+			// Only show uncategorized user markers (not presets)
+			if (!marker.isPreset) {
+				uncategorizedMarkers.push({ marker, index });
+			}
+		} else {
+			const catId = marker.category;
+			if (!markersByCategory[catId]) {
+				markersByCategory[catId] = [];
+			}
+			markersByCategory[catId].push({ marker, index });
 		}
-		markersByCategory[catId].push({ marker, index });
 	});
 
-	// Build HTML grouped by category
+	// Build HTML
 	let html = '';
+
+	// Render uncategorized markers at the top (if any)
+	if (uncategorizedMarkers.length > 0) {
+		const visibleCount = uncategorizedMarkers.filter(
+			({ marker }) => !isMarkerHidden(marker.id)
+		).length;
+
+		html += `
+			<div class="waypoint-category uncategorized-section" data-category="">
+				<div class="waypoint-category-header uncategorized-header" data-category="">
+					<div class="category-dot" style="background-color: #888888"></div>
+					<span class="category-title">Uncategorized</span>
+					<div class="category-ini-btns">
+						<button class="category-ini-btn add-ini" data-category="" title="Add to ARK .ini file">+</button>
+						<button class="category-ini-btn remove-ini" data-category="" title="Remove from ARK .ini file">−</button>
+					</div>
+					<span class="category-marker-count">${visibleCount}/${uncategorizedMarkers.length}</span>
+					<span class="category-expand-icon">▼</span>
+				</div>
+				<div class="waypoint-category-items drop-zone" data-category="">
+		`;
+
+		uncategorizedMarkers.forEach(({ marker, index }) => {
+			const userIndex = getUserMarkerIndex(index);
+			const isHidden = isMarkerHidden(marker.id);
+
+			html += `
+				<div class="waypoint-item${isHidden ? ' hidden-marker' : ''}" 
+					 draggable="true"
+					 data-index="${index}" 
+					 data-user-index="${userIndex}" 
+					 data-is-preset="false"
+					 data-marker-id="${marker.id}">
+					<span class="drag-handle">⋮⋮</span>
+					<button class="marker-visibility-btn${isHidden ? ' hidden-marker' : ''}" 
+							data-marker-id="${marker.id}" 
+							title="${isHidden ? 'Show marker' : 'Hide marker'}">
+						${isHidden ? '○' : '●'}
+					</button>
+					<span class="name">${escapeHtml(marker.name)}</span>
+					<span class="coords">${marker.lat.toFixed(1)}, ${marker.lon.toFixed(1)}</span>
+					<div class="waypoint-actions">
+						<button class="edit-btn" data-user-index="${userIndex}" title="Edit">✎</button>
+						<button class="delete-btn" data-user-index="${userIndex}" title="Delete">✕</button>
+					</div>
+				</div>
+			`;
+		});
+
+		html += `
+				</div>
+			</div>
+		`;
+	}
+
+	// Render categorized markers
 	categories.forEach((cat) => {
 		const categoryMarkers = markersByCategory[cat.id] || [];
 		if (categoryMarkers.length === 0) return;
@@ -924,6 +1144,15 @@ function renderWaypoints() {
 					cat.visible ? 'Hide category' : 'Show category'
 			  }"></div>`;
 
+		// Add INI buttons for user categories only
+		const isCustomCat = isUserCategory(cat.id);
+		const iniBtnsHtml = isCustomCat
+			? `<div class="category-ini-btns">
+					<button class="category-ini-btn add-ini" data-category="${cat.id}" title="Add to ARK .ini file">+</button>
+					<button class="category-ini-btn remove-ini" data-category="${cat.id}" title="Remove from ARK .ini file">−</button>
+			   </div>`
+			: '';
+
 		html += `
 			<div class="waypoint-category collapsed" data-category="${cat.id}">
 				<div class="waypoint-category-header" data-category="${cat.id}">
@@ -932,27 +1161,31 @@ function renderWaypoints() {
 					<button class="category-edit-btn" data-category="${
 						cat.id
 					}" title="Edit category">✎</button>
+					${iniBtnsHtml}
 					<span class="category-marker-count">${visibleCount}/${
 			categoryMarkers.length
 		}</span>
 					<span class="category-expand-icon">▼</span>
 				</div>
-				<div class="waypoint-category-items">
+				<div class="waypoint-category-items${isCustomCat ? ' drop-zone' : ''}" data-category="${cat.id}">
 		`;
 
 		categoryMarkers.forEach(({ marker, index }) => {
 			const isPreset = marker.isPreset;
 			const userIndex = isPreset ? null : getUserMarkerIndex(index);
 			const isHidden = isMarkerHidden(marker.id);
+			const canDrag = !isPreset;
 
 			html += `
 				<div class="waypoint-item${isPreset ? ' preset' : ''}${
 				isHidden ? ' hidden-marker' : ''
 			}" 
+					 ${canDrag ? 'draggable="true"' : ''}
 					 data-index="${index}" 
 					 data-user-index="${userIndex}" 
 					 data-is-preset="${isPreset}"
 					 data-marker-id="${marker.id}">
+					${canDrag ? '<span class="drag-handle">⋮⋮</span>' : ''}
 					<button class="marker-visibility-btn${isHidden ? ' hidden-marker' : ''}" 
 							data-marker-id="${marker.id}" 
 							title="${isHidden ? 'Show marker' : 'Hide marker'}">
@@ -984,6 +1217,9 @@ function renderWaypoints() {
 
 	waypointList.innerHTML = html;
 
+	// Setup drag and drop
+	setupDragAndDrop();
+
 	// Category header click - expand/collapse
 	waypointList
 		.querySelectorAll('.waypoint-category-header')
@@ -991,6 +1227,7 @@ function renderWaypoints() {
 			header.addEventListener('click', (e) => {
 				if (e.target.closest('.category-visibility-toggle')) return;
 				if (e.target.closest('.category-edit-btn')) return;
+				if (e.target.closest('.category-ini-btn')) return;
 				const category = header.closest('.waypoint-category');
 				category.classList.toggle('collapsed');
 			});
@@ -1004,6 +1241,36 @@ function renderWaypoints() {
 			openEditCategoryModal(catId);
 		});
 	});
+
+	// Category INI add button
+	waypointList
+		.querySelectorAll('.category-ini-btn.add-ini')
+		.forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const catId = btn.dataset.category || null;
+				const catName = catId ? categories.find((c) => c.id === catId)?.name : 'Uncategorized';
+				showIniModal(
+					'Add to ARK .ini',
+					`This will add all markers in the "${catName}" category to your ARK game .ini file, making them appear as waypoints in-game.`
+				);
+			});
+		});
+
+	// Category INI remove button
+	waypointList
+		.querySelectorAll('.category-ini-btn.remove-ini')
+		.forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const catId = btn.dataset.category || null;
+				const catName = catId ? categories.find((c) => c.id === catId)?.name : 'Uncategorized';
+				showIniModal(
+					'Remove from ARK .ini',
+					`This will remove all markers in the "${catName}" category from your ARK game .ini file.`
+				);
+			});
+		});
 
 	// Category visibility toggle (clicking the dot/icon)
 	waypointList
@@ -1035,7 +1302,8 @@ function renderWaypoints() {
 		item.addEventListener('click', (e) => {
 			if (
 				e.target.closest('.waypoint-actions') ||
-				e.target.closest('.marker-visibility-btn')
+				e.target.closest('.marker-visibility-btn') ||
+				e.target.closest('.drag-handle')
 			)
 				return;
 			const index = parseInt(item.dataset.index);
@@ -1070,6 +1338,67 @@ function renderWaypoints() {
 	});
 }
 
+// Drag and drop functionality for markers
+function setupDragAndDrop() {
+	let draggedItem = null;
+
+	// Setup draggable items
+	waypointList.querySelectorAll('.waypoint-item[draggable="true"]').forEach((item) => {
+		item.addEventListener('dragstart', (e) => {
+			draggedItem = item;
+			item.classList.add('dragging');
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', item.dataset.userIndex);
+		});
+
+		item.addEventListener('dragend', () => {
+			item.classList.remove('dragging');
+			draggedItem = null;
+			// Remove all drag-over classes
+			waypointList.querySelectorAll('.drag-over').forEach((el) => {
+				el.classList.remove('drag-over');
+			});
+		});
+	});
+
+	// Setup drop zones (category items containers)
+	waypointList.querySelectorAll('.drop-zone').forEach((zone) => {
+		zone.addEventListener('dragover', (e) => {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = 'move';
+			zone.classList.add('drag-over');
+		});
+
+		zone.addEventListener('dragleave', (e) => {
+			// Only remove if we're actually leaving the zone
+			if (!zone.contains(e.relatedTarget)) {
+				zone.classList.remove('drag-over');
+			}
+		});
+
+		zone.addEventListener('drop', (e) => {
+			e.preventDefault();
+			zone.classList.remove('drag-over');
+
+			if (!draggedItem) return;
+
+			const userIndex = parseInt(draggedItem.dataset.userIndex);
+			const targetCategory = zone.dataset.category || null; // empty string becomes null
+
+			if (isNaN(userIndex)) return;
+
+			// Update the marker's category
+			const mapMarkers = userMarkers[currentMap] || [];
+			if (mapMarkers[userIndex]) {
+				mapMarkers[userIndex].category = targetCategory;
+				saveState();
+				renderMapMarkers();
+				renderWaypoints();
+			}
+		});
+	});
+}
+
 function panToMarker(lat, lon) {
 	// Center the map on the marker
 	const imgWidth = mapImage.naturalWidth;
@@ -1099,6 +1428,13 @@ function openMarkerModal(lat, lon) {
 	markerCategorySelect.value = selectedCategory;
 	deleteMarkerBtn.classList.add('hidden');
 
+	// Reset new category toggle state
+	newCategoryInput.style.display = 'none';
+	newCategoryInput.value = '';
+	markerCategorySelect.style.display = '';
+	toggleNewCategoryBtn.textContent = '+';
+	toggleNewCategoryBtn.title = 'Create new category';
+
 	markerModal.classList.remove('hidden');
 	markerNameInput.focus();
 }
@@ -1116,8 +1452,15 @@ function openEditMarkerModal(index) {
 	markerNameInput.value = marker.name;
 	markerLatInput.value = marker.lat.toFixed(1);
 	markerLonInput.value = marker.lon.toFixed(1);
-	markerCategorySelect.value = marker.category;
+	markerCategorySelect.value = marker.category || ''; // null becomes empty string
 	deleteMarkerBtn.classList.remove('hidden');
+
+	// Reset new category toggle state
+	newCategoryInput.style.display = 'none';
+	newCategoryInput.value = '';
+	markerCategorySelect.style.display = '';
+	toggleNewCategoryBtn.textContent = '+';
+	toggleNewCategoryBtn.title = 'Create new category';
 
 	markerModal.classList.remove('hidden');
 	markerNameInput.focus();
@@ -1156,11 +1499,36 @@ function closeMarkerModal() {
 
 function saveMarker() {
 	const name = markerNameInput.value.trim() || 'Unnamed Marker';
-	const category = markerCategorySelect.value;
 	const lat = parseFloat(markerLatInput.value);
 	const lon = parseFloat(markerLonInput.value);
 
 	if (isNaN(lat) || isNaN(lon)) return;
+
+	// Determine category - either from new category input or select
+	let category;
+	if (newCategoryInput.style.display !== 'none' && newCategoryInput.value.trim()) {
+		// Creating a new category inline
+		const newCatName = newCategoryInput.value.trim();
+		const newCatId = 'cat_' + Date.now();
+		// Create the category
+		if (!mapCategories[currentMap]) {
+			mapCategories[currentMap] = [];
+		}
+		const newCategory = {
+			id: newCatId,
+			name: newCatName,
+			color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), // Random color
+			visible: true
+		};
+		mapCategories[currentMap].push(newCategory);
+		category = newCatId;
+	} else {
+		// Empty string becomes null for uncategorized
+		category = markerCategorySelect.value || null;
+	}
+
+	// Remember the last used category for new markers
+	selectedCategory = category || '';
 
 	if (editingPresetIndex !== null) {
 		// Update preset marker override
