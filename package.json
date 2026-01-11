@@ -1,6 +1,6 @@
 {
 	"name": "ark-locator",
-	"version": "0.2.4",
+	"version": "0.2.5",
 	"description": "Ark Locator Electron App",
 	"main": "main.js",
 	"scripts": {
@@ -13,7 +13,7 @@
 	"author": "",
 	"license": "ISC",
 	"devDependencies": {
-		"electron": "^28.0.0",
+		"electron": "^27.3.11",
 		"electron-builder": "^24.0.0"
 	},
 	"dependencies": {
