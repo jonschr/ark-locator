@@ -1,16 +1,43 @@
 {
 	"name": "ark-locator",
-	"version": "1.0.0",
+	"version": "0.2.0",
 	"description": "Ark Locator Electron App",
 	"main": "main.js",
 	"scripts": {
 		"start": "electron .",
-		"restart": "pkill -f 'electron.*ark-locator' 2>/dev/null; sleep 1; electron ."
+		"restart": "pkill -f 'electron.*ark-locator' 2>/dev/null; sleep 1; electron .",
+		"dist": "electron-builder",
+		"publish": "electron-builder --publish=always"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"devDependencies": {
-		"electron": "^28.0.0"
+		"electron": "^28.0.0",
+		"electron-builder": "^24.0.0"
+	},
+	"dependencies": {
+		"electron-updater": "^6.7.3"
+	},
+	"build": {
+		"appId": "com.jonschr.ark-locator",
+		"productName": "ARK Locator",
+		"directories": {
+			"output": "dist"
+		},
+		"publish": {
+			"provider": "github",
+			"owner": "jonschr",
+			"repo": "ark-locator"
+		},
+		"mac": {
+			"category": "public.app-category.utilities"
+		},
+		"win": {
+			"target": "nsis"
+		},
+		"linux": {
+			"target": "AppImage"
+		}
 	}
 }

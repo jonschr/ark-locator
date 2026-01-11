@@ -4,10 +4,13 @@ const {
 	ipcMain,
 	dialog,
 	nativeImage,
+	shell,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const https = require('https');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 
@@ -78,6 +81,21 @@ app.whenReady().then(() => {
 	}
 
 	createWindow();
+
+	// Setup auto-updater
+	autoUpdater.checkForUpdatesAndNotify();
+
+	autoUpdater.on('update-available', () => {
+		mainWindow.webContents.send('update-available');
+	});
+
+	autoUpdater.on('update-downloaded', () => {
+		mainWindow.webContents.send('update-downloaded');
+	});
+
+	autoUpdater.on('error', (error) => {
+		console.error('Auto-updater error:', error);
+	});
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
@@ -168,4 +186,165 @@ ipcMain.handle('get-desktop-path', () => {
 ipcMain.on('restart-app', () => {
 	app.relaunch();
 	app.exit(0);
+});
+
+// Check for updates from GitHub
+ipcMain.handle('check-for-updates', () => {
+	return new Promise((resolve) => {
+		const options = {
+			hostname: 'api.github.com',
+			path: '/repos/jonschr/ark-locator/tags',
+			method: 'GET',
+			headers: {
+				'User-Agent': 'ARK-Locator-App',
+				Accept: 'application/vnd.github.v3+json',
+			},
+		};
+
+		const req = https.request(options, (res) => {
+			let data = '';
+
+			res.on('data', (chunk) => {
+				data += chunk;
+			});
+
+			res.on('end', () => {
+				try {
+					if (res.statusCode === 404) {
+						// No tags found
+						resolve({
+							success: true,
+							version: null,
+							url: null,
+							body: null,
+						});
+						return;
+					}
+
+					const tags = JSON.parse(data);
+
+					// Filter and sort version tags
+					const versionTags = tags
+						.map((tag) => tag.name)
+						.filter(
+							(name) =>
+								/^\d+\.\d+/.test(name) ||
+								/^v\d+\.\d+/.test(name)
+						) // Match version patterns like 1.0, v1.0, 0.1, etc.
+						.map((name) => ({
+							name: name,
+							version: name.replace(/^v/, ''), // Remove 'v' prefix for comparison
+						}))
+						.sort((a, b) => {
+							// Sort by semantic version (newest first)
+							const aParts = a.version.split('.').map(Number);
+							const bParts = b.version.split('.').map(Number);
+
+							for (
+								let i = 0;
+								i < Math.max(aParts.length, bParts.length);
+								i++
+							) {
+								const aPart = aParts[i] || 0;
+								const bPart = bParts[i] || 0;
+
+								if (aPart > bPart) return -1;
+								if (aPart < bPart) return 1;
+							}
+
+							return 0;
+						});
+
+					if (versionTags.length === 0) {
+						// No version tags found
+						resolve({
+							success: true,
+							version: null,
+							url: null,
+							body: null,
+						});
+						return;
+					}
+
+					const latestTag = versionTags[0];
+					const releaseUrl = `https://github.com/jonschr/ark-locator/releases/tag/${latestTag.name}`;
+
+					resolve({
+						success: true,
+						version: latestTag.name,
+						url: releaseUrl,
+						body: `Latest version: ${latestTag.name}`,
+					});
+				} catch (err) {
+					resolve({
+						success: false,
+						error: 'Failed to parse response',
+					});
+				}
+			});
+		});
+
+		req.on('error', (err) => {
+			resolve({ success: false, error: err.message });
+		});
+
+		req.setTimeout(10000, () => {
+			req.destroy();
+			resolve({ success: false, error: 'Request timeout' });
+		});
+
+		req.end();
+	});
+});
+
+// Open URL in default browser
+ipcMain.handle('open-external-url', (event, url) => {
+	shell.openExternal(url);
+});
+
+// Get app version
+ipcMain.handle('get-app-version', () => {
+	return app.getVersion();
+});
+
+// Quit and install update
+ipcMain.handle('quit-and-install-update', () => {
+	autoUpdater.quitAndInstall();
+});
+
+// Load preset data
+ipcMain.handle('load-preset-data', () => {
+	const presetsDir = path.join(__dirname, 'data', 'presets');
+	const mapNames = [
+		'island',
+		'scorched-earth',
+		'aberration',
+		'extinction',
+		'the-center',
+		'ragnarok',
+		'valguero',
+		'genesis-1',
+		'crystal-isles',
+		'genesis-2',
+		'lost-island',
+		'fjordur',
+		'lost-colony',
+		'astraeos',
+	];
+
+	const presetLocations = {};
+
+	mapNames.forEach((mapName) => {
+		const filePath = path.join(presetsDir, `${mapName}.json`);
+		try {
+			if (fs.existsSync(filePath)) {
+				const data = fs.readFileSync(filePath, 'utf8');
+				presetLocations[mapName] = JSON.parse(data);
+			}
+		} catch (err) {
+			console.warn(`Could not load presets for ${mapName}:`, err.message);
+		}
+	});
+
+	return presetLocations;
 });

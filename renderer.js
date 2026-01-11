@@ -195,46 +195,16 @@ const mapImages = {
 };
 
 // Preset locations - loaded from JSON files
-const presetLocations = {};
+let presetLocations = {};
 
-// Load preset data from JSON files
-const path = require('path');
-const fs = require('fs');
-
-function loadPresetData() {
-	const presetsDir = path.join(__dirname, 'data', 'presets');
-	const mapNames = [
-		'island',
-		'scorched-earth',
-		'aberration',
-		'extinction',
-		'the-center',
-		'ragnarok',
-		'valguero',
-		'genesis-1',
-		'crystal-isles',
-		'genesis-2',
-		'lost-island',
-		'fjordur',
-		'lost-colony',
-		'astraeos',
-	];
-
-	mapNames.forEach((mapName) => {
-		const filePath = path.join(presetsDir, `${mapName}.json`);
-		try {
-			if (fs.existsSync(filePath)) {
-				const data = fs.readFileSync(filePath, 'utf8');
-				presetLocations[mapName] = JSON.parse(data);
-			}
-		} catch (err) {
-			console.warn(`Could not load presets for ${mapName}:`, err.message);
-		}
-	});
+// Load preset data from main process
+async function loadPresetData() {
+	try {
+		presetLocations = await ipcRenderer.invoke('load-preset-data');
+	} catch (err) {
+		console.warn('Could not load preset data:', err);
+	}
 }
-
-// Load presets immediately
-loadPresetData();
 
 // ===========================================
 // DOM ELEMENTS
@@ -286,6 +256,8 @@ let editingCategoryId = null; // Track if editing an existing category
 const helpModal = document.getElementById('help-modal');
 const helpBtn = document.getElementById('help-btn');
 const closeHelpBtn = document.getElementById('close-help');
+const checkUpdatesBtn = document.getElementById('check-updates-btn');
+const appVersionEl = document.getElementById('app-version');
 
 // INI modal elements
 const iniModal = document.getElementById('ini-modal');
@@ -306,13 +278,185 @@ document.querySelectorAll('.collapsible-header').forEach((header) => {
 // ===========================================
 // INITIALIZATION
 // ===========================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+	await loadPresetData(); // Load preset data first
 	loadState();
 	setupEventListeners();
 	loadMap(currentMap);
 	updateCategorySelect();
 	renderWaypoints();
+
+	// Set version display
+	ipcRenderer
+		.invoke('get-app-version')
+		.then((version) => {
+			if (appVersionEl) {
+				appVersionEl.textContent = version;
+			}
+		})
+		.catch((err) => {
+			console.warn('Failed to get app version:', err);
+		});
+
+	checkForUpdates(); // Check for updates on startup
+
+	// Listen for auto-updater events
+	ipcRenderer.on('update-available', () => {
+		showAutoUpdateNotification(
+			'Update available! Downloading...',
+			'update-checking'
+		);
+	});
+
+	ipcRenderer.on('update-downloaded', () => {
+		showAutoUpdateNotification(
+			'Update downloaded! Restart to install.',
+			'update-ready'
+		);
+	});
 });
+
+// ===========================================
+// UPDATE CHECKING
+// ===========================================
+async function checkForUpdates() {
+	try {
+		const result = await ipcRenderer.invoke('check-for-updates');
+		if (!result.success) {
+			console.warn('Update check failed:', result.error);
+			return;
+		}
+
+		const currentVersion = await ipcRenderer.invoke('get-app-version');
+		const latestVersion = result.version
+			? result.version.replace('v', '')
+			: null;
+
+		if (latestVersion && isNewerVersion(latestVersion, currentVersion)) {
+			showUpdateNotification(latestVersion, result.url, result.body);
+		}
+	} catch (err) {
+		console.warn('Update check error:', err);
+	}
+}
+
+function isNewerVersion(latest, current) {
+	const latestParts = latest.split('.').map(Number);
+	const currentParts = current.split('.').map(Number);
+
+	for (
+		let i = 0;
+		i < Math.max(latestParts.length, currentParts.length);
+		i++
+	) {
+		const latestPart = latestParts[i] || 0;
+		const currentPart = currentParts[i] || 0;
+
+		if (latestPart > currentPart) return true;
+		if (latestPart < currentPart) return false;
+	}
+
+	return false;
+}
+
+function showUpdateNotification(version, url, body) {
+	// Create update notification element
+	const notification = document.createElement('div');
+	notification.className = 'update-notification';
+	notification.innerHTML = `
+		<div class="update-notification-content">
+			<div class="update-notification-header">
+				<span class="update-icon">⬆️</span>
+				<span class="update-title">Update Available</span>
+				<button class="update-close-btn" title="Close">×</button>
+			</div>
+			<div class="update-notification-body">
+				<p>A new version (${version}) is available!</p>
+				<div class="update-actions">
+					<button class="update-download-btn">Download Update</button>
+					<button class="update-ignore-btn">Ignore</button>
+				</div>
+			</div>
+		</div>
+	`;
+
+	// Add event listeners
+	const closeBtn = notification.querySelector('.update-close-btn');
+	const downloadBtn = notification.querySelector('.update-download-btn');
+	const ignoreBtn = notification.querySelector('.update-ignore-btn');
+
+	closeBtn.addEventListener('click', () => {
+		notification.remove();
+	});
+
+	downloadBtn.addEventListener('click', () => {
+		ipcRenderer.invoke('open-external-url', url);
+		notification.remove();
+	});
+
+	ignoreBtn.addEventListener('click', () => {
+		notification.remove();
+	});
+
+	// Add to page
+	document.body.appendChild(notification);
+
+	// Auto-hide after 30 seconds
+	setTimeout(() => {
+		if (notification.parentNode) {
+			notification.remove();
+		}
+	}, 30000);
+}
+
+function showAutoUpdateNotification(message, type) {
+	// Remove any existing auto-update notification
+	const existing = document.querySelector('.auto-update-notification');
+	if (existing) existing.remove();
+
+	// Create auto-update notification
+	const notification = document.createElement('div');
+	notification.className = 'update-notification auto-update-notification';
+
+	let actions = '';
+	if (type === 'update-ready') {
+		actions =
+			'<button class="update-restart-btn">Restart & Install</button>';
+	}
+
+	notification.innerHTML = `
+		<div class="update-notification-content">
+			<div class="update-notification-header">
+				<span class="update-icon">⬆️</span>
+				<span class="update-title">Auto Update</span>
+				<button class="update-close-btn" title="Close">×</button>
+			</div>
+			<div class="update-notification-body">
+				<p>${message}</p>
+				<div class="update-actions">
+					${actions}
+				</div>
+			</div>
+		</div>
+	`;
+
+	// Add event listeners
+	const closeBtn = notification.querySelector('.update-close-btn');
+	const restartBtn = notification.querySelector('.update-restart-btn');
+
+	closeBtn.addEventListener('click', () => {
+		notification.remove();
+	});
+
+	if (restartBtn) {
+		restartBtn.addEventListener('click', () => {
+			ipcRenderer.invoke('quit-and-install-update');
+		});
+	}
+
+	// Add to page
+	document.body.appendChild(notification);
+}
 
 function setupEventListeners() {
 	// Sidebar resize
@@ -338,7 +482,18 @@ function setupEventListeners() {
 			sidebarResize.classList.remove('resizing');
 			document.body.style.cursor = '';
 			document.body.style.userSelect = '';
+			// Reposition markers after sidebar resize
+			renderMapMarkers();
 		}
+	});
+
+	// Window resize - reposition markers when window size changes
+	let resizeTimeout;
+	window.addEventListener('resize', () => {
+		clearTimeout(resizeTimeout);
+		resizeTimeout = setTimeout(() => {
+			renderMapMarkers();
+		}, 100); // Debounce for 100ms
 	});
 
 	// Map selection
@@ -396,6 +551,18 @@ function setupEventListeners() {
 	closeHelpBtn.addEventListener('click', () =>
 		helpModal.classList.add('hidden')
 	);
+	checkUpdatesBtn.addEventListener('click', async () => {
+		checkUpdatesBtn.disabled = true;
+		checkUpdatesBtn.textContent = 'Checking...';
+
+		await checkForUpdates();
+
+		checkUpdatesBtn.disabled = false;
+		checkUpdatesBtn.textContent = 'Check for Updates';
+
+		// Show a message indicating check is complete
+		showStatus(ioStatus, 'Update check complete', 'info');
+	});
 	helpModal.addEventListener('click', (e) => {
 		if (e.target === helpModal) helpModal.classList.add('hidden');
 	});
@@ -522,11 +689,45 @@ function getMinScale() {
 	return Math.max(scaleX, scaleY);
 }
 
-function zoomMap(factor) {
+function zoomMap(factor, mouseX = null, mouseY = null) {
 	const newScale = mapScale * factor;
 	const minScale = getMinScale();
 
 	if (newScale >= minScale && newScale <= 10) {
+		// If mouse position is provided, zoom towards that point
+		if (mouseX !== null && mouseY !== null) {
+			const rect = mapViewport.getBoundingClientRect();
+			const centerX = rect.width / 2;
+			const centerY = rect.height / 2;
+
+			// mouseX and mouseY are already relative to mapViewport (offsetX/offsetY)
+			const mouseRelX = mouseX - centerX;
+			const mouseRelY = mouseY - centerY;
+
+			// Adjust offset to center the zoom on the cursor position
+			mapOffsetX = mapOffsetX * factor - mouseRelX * factor;
+			mapOffsetY = mapOffsetY * factor - mouseRelY * factor;
+		} else {
+			// Zoom to center - scale the offset to keep center fixed
+			mapOffsetX *= factor;
+			mapOffsetY *= factor;
+		}
+
+		// Clamp offset to keep the image visible within the viewport
+		const rect = mapViewport.getBoundingClientRect();
+		const centerX = rect.width / 2;
+		const centerY = rect.height / 2;
+		const imgWidth = mapImage.naturalWidth;
+		const imgHeight = mapImage.naturalHeight;
+		const scaledHalfWidth = imgWidth / 2 * newScale;
+		const scaledHalfHeight = imgHeight / 2 * newScale;
+		const minOffsetX = -centerX + scaledHalfWidth;
+		const maxOffsetX = rect.width - centerX - scaledHalfWidth;
+		const minOffsetY = -centerY + scaledHalfHeight;
+		const maxOffsetY = rect.height - centerY - scaledHalfHeight;
+		mapOffsetX = Math.max(minOffsetX, Math.min(maxOffsetX, mapOffsetX));
+		mapOffsetY = Math.max(minOffsetY, Math.min(maxOffsetY, mapOffsetY));
+
 		mapScale = newScale;
 		updateMapTransform();
 		// Use requestAnimationFrame to sync marker updates with transform
@@ -544,7 +745,7 @@ function handleMapWheel(e) {
 	e.preventDefault();
 	// Smaller zoom steps for smoother zooming
 	const factor = e.deltaY > 0 ? 0.95 : 1.05;
-	zoomMap(factor);
+	zoomMap(factor, e.offsetX, e.offsetY);
 }
 
 function handleKeyDown(e) {
