@@ -26,13 +26,33 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Build app
-              run: npx electron-builder --publish never
+            - name: Build and publish
+              run: npx electron-builder --publish always
               env:
                   DEBUG: electron-builder*
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Upload artifacts
-              uses: actions/upload-artifact@v4
+            - name: Update release with download links
+              uses: softprops/action-gh-release@v1
               with:
-                  name: ark-locator-${{ matrix.os }}
-                  path: dist/*
+                  tag_name: ${{ github.ref_name }}
+                  body: |
+                    ## Downloads
+
+                    ### Windows
+                    - **[ARK Locator Setup ${{ github.ref_name }}.exe](https://github.com/jonschr/ark-locator/releases/download/${{ github.ref_name }}/ARK%20Locator%20Setup%20${{ github.ref_name }}.exe)** - Windows installer
+
+                    ### macOS
+                    - **[ARK Locator ${{ github.ref_name }}-arm64.dmg](https://github.com/jonschr/ark-locator/releases/download/${{ github.ref_name }}/ARK%20Locator-${{ github.ref_name }}-arm64.dmg)** - macOS installer
+
+                    ## Installation
+
+                    1. Download the installer for your platform above
+                    2. Run the installer and follow the setup wizard
+                    3. Launch ARK Locator from your applications menu
+
+                    ## What's New
+
+                    See the changelog for details about this release.
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
