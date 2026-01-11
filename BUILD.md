@@ -16,9 +16,10 @@ This document covers all aspects of building, testing, and distributing the ARK 
 
 ### Prerequisites
 
-- **Node.js**: v20 (recommended for better compatibility)
+-   **Node.js**: v20 (recommended for better compatibility)
 -   **Git**: For version control
 -   **Code Editor**: VS Code recommended with Electron extensions- **Electron**: v27 (automatically installed via npm)
+
 ### Initial Setup
 
 1. **Clone the repository:**
