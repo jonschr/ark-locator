@@ -80,19 +80,7 @@ npm start
 -   `data/presets/` - JSON files containing preset marker data for each map
 -   `assets/` - Images, icons, and other static assets
 
-## 📦 Building for Distribution
-
-To create installable packages for distribution:
-
-```bash
-npm run dist
-```
-
-This creates:
-
--   **Windows:** `.exe` installer (NSIS)
--   **macOS:** `.dmg` disk image
--   **Linux:** `.AppImage` portable app
+📖 **Detailed Build Guide:** See [BUILD.md](BUILD.md) for comprehensive documentation on building, CI/CD, and distribution.
 
 ## 🤝 Contributing
 
