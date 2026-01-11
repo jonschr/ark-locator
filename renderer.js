@@ -759,7 +759,7 @@ function renderMapMarkers() {
 		// Handle uncategorized markers (no category)
 		let category;
 		let markerColor = '#888888'; // Default gray for uncategorized
-		
+
 		if (!marker.category) {
 			// Uncategorized marker - always visible unless individually hidden
 			category = UNCATEGORIZED_DISPLAY;
@@ -768,7 +768,7 @@ function renderMapMarkers() {
 			// Skip if category is hidden
 			if (!category || !category.visible) return;
 		}
-		
+
 		// Skip if individual marker is hidden
 		if (isMarkerHidden(marker.id)) return;
 
@@ -895,7 +895,9 @@ function updateCategorySelect() {
 function getMarkerCountForCategory(categoryId) {
 	const allMarkers = getAllMarkers(currentMap);
 	// Handle null/undefined category matching
-	return allMarkers.filter((m) => (m.category || null) === (categoryId || null)).length;
+	return allMarkers.filter(
+		(m) => (m.category || null) === (categoryId || null)
+	).length;
 }
 
 function toggleAllCategoriesVisibility(visible) {
@@ -925,14 +927,14 @@ function openEditCategoryModal(categoryId) {
 	categoryModalTitle.textContent = 'Edit Category';
 	categoryNameInput.value = cat.name;
 	categoryColorInput.value = cat.color;
-	
+
 	// Only show delete button for user categories (not preset categories)
 	if (isUserCategory(categoryId)) {
 		deleteCategoryBtn.classList.remove('hidden');
 	} else {
 		deleteCategoryBtn.classList.add('hidden');
 	}
-	
+
 	categoryModal.classList.remove('hidden');
 }
 
@@ -946,18 +948,20 @@ function closeCategoryModal() {
 // Delete the currently editing category
 function deleteCurrentCategory() {
 	if (!editingCategoryId) return;
-	
+
 	const categories = getCategories();
 	const cat = categories.find((c) => c.id === editingCategoryId);
 	const markerCount = getMarkerCountForCategory(editingCategoryId);
-	
-	let confirmMsg = `Are you sure you want to delete the "${cat?.name || editingCategoryId}" category?`;
+
+	let confirmMsg = `Are you sure you want to delete the "${
+		cat?.name || editingCategoryId
+	}" category?`;
 	if (markerCount > 0) {
 		confirmMsg += `\n\nThis category has ${markerCount} marker(s). They will be moved to "Uncategorized".`;
 	}
-	
+
 	if (!confirm(confirmMsg)) return;
-	
+
 	// Move markers to uncategorized
 	if (markerCount > 0) {
 		const mapMarkers = userMarkers[currentMap] || [];
@@ -967,7 +971,7 @@ function deleteCurrentCategory() {
 			}
 		});
 	}
-	
+
 	// Remove from custom categories
 	const mapOverrides = mapCategories[currentMap] || {};
 	const customCats = mapOverrides._custom || [];
@@ -975,7 +979,7 @@ function deleteCurrentCategory() {
 	if (customIndex >= 0) {
 		customCats.splice(customIndex, 1);
 	}
-	
+
 	saveState();
 	updateCategorySelect();
 	renderMapMarkers();
@@ -1167,7 +1171,9 @@ function renderWaypoints() {
 		}</span>
 					<span class="category-expand-icon">▼</span>
 				</div>
-				<div class="waypoint-category-items${isCustomCat ? ' drop-zone' : ''}" data-category="${cat.id}">
+				<div class="waypoint-category-items${
+					isCustomCat ? ' drop-zone' : ''
+				}" data-category="${cat.id}">
 		`;
 
 		categoryMarkers.forEach(({ marker, index }) => {
@@ -1249,7 +1255,9 @@ function renderWaypoints() {
 			btn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				const catId = btn.dataset.category || null;
-				const catName = catId ? categories.find((c) => c.id === catId)?.name : 'Uncategorized';
+				const catName = catId
+					? categories.find((c) => c.id === catId)?.name
+					: 'Uncategorized';
 				showIniModal(
 					'Add to ARK .ini',
 					`This will add all markers in the "${catName}" category to your ARK game .ini file, making them appear as waypoints in-game.`
@@ -1264,7 +1272,9 @@ function renderWaypoints() {
 			btn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				const catId = btn.dataset.category || null;
-				const catName = catId ? categories.find((c) => c.id === catId)?.name : 'Uncategorized';
+				const catName = catId
+					? categories.find((c) => c.id === catId)?.name
+					: 'Uncategorized';
 				showIniModal(
 					'Remove from ARK .ini',
 					`This will remove all markers in the "${catName}" category from your ARK game .ini file.`
@@ -1343,23 +1353,25 @@ function setupDragAndDrop() {
 	let draggedItem = null;
 
 	// Setup draggable items
-	waypointList.querySelectorAll('.waypoint-item[draggable="true"]').forEach((item) => {
-		item.addEventListener('dragstart', (e) => {
-			draggedItem = item;
-			item.classList.add('dragging');
-			e.dataTransfer.effectAllowed = 'move';
-			e.dataTransfer.setData('text/plain', item.dataset.userIndex);
-		});
+	waypointList
+		.querySelectorAll('.waypoint-item[draggable="true"]')
+		.forEach((item) => {
+			item.addEventListener('dragstart', (e) => {
+				draggedItem = item;
+				item.classList.add('dragging');
+				e.dataTransfer.effectAllowed = 'move';
+				e.dataTransfer.setData('text/plain', item.dataset.userIndex);
+			});
 
-		item.addEventListener('dragend', () => {
-			item.classList.remove('dragging');
-			draggedItem = null;
-			// Remove all drag-over classes
-			waypointList.querySelectorAll('.drag-over').forEach((el) => {
-				el.classList.remove('drag-over');
+			item.addEventListener('dragend', () => {
+				item.classList.remove('dragging');
+				draggedItem = null;
+				// Remove all drag-over classes
+				waypointList.querySelectorAll('.drag-over').forEach((el) => {
+					el.classList.remove('drag-over');
+				});
 			});
 		});
-	});
 
 	// Setup drop zones (category items containers)
 	waypointList.querySelectorAll('.drop-zone').forEach((zone) => {
@@ -1506,7 +1518,10 @@ function saveMarker() {
 
 	// Determine category - either from new category input or select
 	let category;
-	if (newCategoryInput.style.display !== 'none' && newCategoryInput.value.trim()) {
+	if (
+		newCategoryInput.style.display !== 'none' &&
+		newCategoryInput.value.trim()
+	) {
 		// Creating a new category inline
 		const newCatName = newCategoryInput.value.trim();
 		const newCatId = 'cat_' + Date.now();
@@ -1517,8 +1532,12 @@ function saveMarker() {
 		const newCategory = {
 			id: newCatId,
 			name: newCatName,
-			color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), // Random color
-			visible: true
+			color:
+				'#' +
+				Math.floor(Math.random() * 16777215)
+					.toString(16)
+					.padStart(6, '0'), // Random color
+			visible: true,
 		};
 		mapCategories[currentMap].push(newCategory);
 		category = newCatId;
