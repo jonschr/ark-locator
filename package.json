@@ -1,6 +1,6 @@
 {
 	"name": "ark-locator",
-	"version": "0.2.5",
+	"version": "0.2.6",
 	"description": "Ark Locator Electron App",
 	"main": "main.js",
 	"scripts": {
