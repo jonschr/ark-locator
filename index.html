@@ -5,31 +5,28 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta
 			http-equiv="Content-Security-Policy"
-			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://r2.wikily.gg data:"
+			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://r2.wikily.gg https://ark.wiki.gg data:"
 		/>
-		<title>Ark Locator</title>
+		<title>ARK Locator</title>
 		<link rel="stylesheet" href="styles.css" />
 	</head>
 	<body>
 		<div class="app-container">
 			<!-- Collapsible Sidebar -->
 			<aside id="sidebar" class="sidebar">
+				<div id="sidebar-resize" class="sidebar-resize-handle"></div>
 				<div class="sidebar-header">
-					<h1>🦖 Ark Locator</h1>
-					<button
-						id="toggle-sidebar"
-						class="toggle-btn"
-						title="Toggle Sidebar"
-					>
-						◀
-					</button>
+					<h1>Ark Locator</h1>
 				</div>
 
 				<div class="sidebar-content">
 					<!-- Map Selection -->
 					<section class="sidebar-section">
-						<h3>🗺️ Select Map</h3>
+						<h3>Select Map</h3>
 						<select id="map-select" class="map-select">
+							<option value="lost-colony">Lost Colony</option>
+							<option value="astraeos">Astraeos</option>
+							<option value="valguero">Valguero</option>
 							<option value="island">The Island</option>
 							<option value="scorched-earth">
 								Scorched Earth
@@ -38,20 +35,42 @@
 							<option value="extinction">Extinction</option>
 							<option value="the-center">The Center</option>
 							<option value="ragnarok">Ragnarok</option>
-							<option value="valguero">Valguero</option>
 							<option value="genesis-1">Genesis: Part 1</option>
 							<option value="crystal-isles">Crystal Isles</option>
 							<option value="genesis-2">Genesis: Part 2</option>
 							<option value="lost-island">Lost Island</option>
 							<option value="fjordur">Fjordur</option>
-							<option value="astraeos">Astraeos</option>
 						</select>
 					</section>
 
-					<!-- Marker Categories -->
+					<!-- Waypoint Lists -->
 					<section class="sidebar-section">
-						<h3>📍 Marker Categories</h3>
-						<div id="category-list" class="category-list"></div>
+						<h3>Waypoints</h3>
+						<div class="waypoint-stats">
+							<span id="waypoint-count">0 markers</span>
+							<div class="visibility-toggles">
+								<button
+									id="show-all-btn"
+									class="btn-link"
+									title="Show all categories"
+								>
+									Show All
+								</button>
+								<span class="separator">|</span>
+								<button
+									id="hide-all-btn"
+									class="btn-link"
+									title="Hide all categories"
+								>
+									Hide All
+								</button>
+							</div>
+						</div>
+						<div id="waypoint-list" class="waypoint-list">
+							<p class="empty-state">
+								Double-click on the map to add markers
+							</p>
+						</div>
 						<button
 							id="add-category-btn"
 							class="btn btn-small btn-secondary"
@@ -60,23 +79,10 @@
 						</button>
 					</section>
 
-					<!-- Waypoint Lists -->
-					<section class="sidebar-section">
-						<h3>📋 Waypoints</h3>
-						<div class="waypoint-stats">
-							<span id="waypoint-count">0 markers</span>
-						</div>
-						<div id="waypoint-list" class="waypoint-list">
-							<p class="empty-state">
-								Click on the map to add markers
-							</p>
-						</div>
-					</section>
-
 					<!-- Import/Export -->
 					<section class="sidebar-section collapsible">
 						<h3 class="collapsible-header">
-							<span>💾 Import / Export</span>
+							<span>Import / Export</span>
 							<span class="collapse-icon">▼</span>
 						</h3>
 						<div class="collapsible-content">
@@ -157,20 +163,62 @@
 
 				<!-- No Map Message -->
 				<div id="no-map-message" class="no-map-message hidden">
-					<p>🗺️ Map image not available for this map</p>
+					<p>Map image not available for this map</p>
 					<p class="sub">
 						Select a different map or add your own map images
 					</p>
 				</div>
 
-				<!-- Controls Help -->
-				<div class="controls-help">
-					<span>🖱️ Click: Add marker</span>
-					<span>🖱️ Middle/Right drag: Pan</span>
-					<span>⚙️ Scroll: Zoom</span>
-					<span>⌨️ Space+drag: Pan</span>
-				</div>
+				<!-- Help Button -->
+				<button
+					id="help-btn"
+					class="help-btn"
+					title="Keyboard Shortcuts"
+				>
+					?
+				</button>
 			</main>
+		</div>
+
+		<!-- Help Modal -->
+		<div id="help-modal" class="modal hidden">
+			<div class="modal-content modal-content-help">
+				<h3>Keyboard Shortcuts</h3>
+				<table class="hotkeys-table">
+					<thead>
+						<tr>
+							<th>Action</th>
+							<th>Shortcut</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Add marker</td>
+							<td>Double-click</td>
+						</tr>
+						<tr>
+							<td>Pan map</td>
+							<td>Click + drag</td>
+						</tr>
+						<tr>
+							<td>Pan map (alt)</td>
+							<td>Space + drag</td>
+						</tr>
+						<tr>
+							<td>Zoom</td>
+							<td>Scroll wheel</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="modal-actions">
+					<button id="clear-data-btn" class="btn btn-danger">
+						Clear All Data
+					</button>
+					<button id="close-help" class="btn btn-primary">
+						Close
+					</button>
+				</div>
+			</div>
 		</div>
 
 		<!-- Add Marker Modal -->
@@ -215,10 +263,10 @@
 			</div>
 		</div>
 
-		<!-- Add Category Modal -->
+		<!-- Category Modal (Add/Edit) -->
 		<div id="category-modal" class="modal hidden">
 			<div class="modal-content">
-				<h3>Add Category</h3>
+				<h3 id="category-modal-title">Add Category</h3>
 				<div class="form-group">
 					<label for="category-name">Category Name</label>
 					<input
@@ -236,7 +284,7 @@
 						Cancel
 					</button>
 					<button id="save-category" class="btn btn-primary">
-						Save Category
+						Save
 					</button>
 				</div>
 			</div>

@@ -1,0 +1,230 @@
+{
+	"obelisks": [
+		{
+			"name": "King Titan Terminal",
+			"lat": 9.5,
+			"lon": 40.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Desert Titan Terminal",
+			"lat": 87.0,
+			"lon": 71.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Ice Titan Terminal",
+			"lat": 9.0,
+			"lon": 64.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Forest Titan Terminal",
+			"lat": 18.0,
+			"lon": 62.0,
+			"category": "obelisks"
+		}
+	],
+	"drops-veins": [
+		{
+			"name": "Purple",
+			"lat": 33.6,
+			"lon": 59.2,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple",
+			"lat": 25.5,
+			"lon": 59.3,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/25k/50k",
+			"lat": 18.3,
+			"lon": 56.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/25k/50k",
+			"lat": 22.2,
+			"lon": 46,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 26.8,
+			"lon": 53.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 30.8,
+			"lon": 52.7,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue/10k",
+			"lat": 33,
+			"lon": 46.8,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue/10k/25k",
+			"lat": 31.7,
+			"lon": 38.7,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue/10k/25k",
+			"lat": 26.1,
+			"lon": 38.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue/10k/25k",
+			"lat": 23.1,
+			"lon": 40,
+			"category": "drops-veins"
+		},
+		{ "name": "50k", "lat": 32.1, "lon": 33.9, "category": "drops-veins" },
+		{
+			"name": "Yellow/Blue/10k/25k",
+			"lat": 38.6,
+			"lon": 29.8,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/50k",
+			"lat": 33.8,
+			"lon": 7.4,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/25k/50k",
+			"lat": 18,
+			"lon": 6.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow",
+			"lat": 10.6,
+			"lon": 13.2,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple",
+			"lat": 42.4,
+			"lon": 7.2,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/50k",
+			"lat": 51.2,
+			"lon": 13.6,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/50k",
+			"lat": 53.2,
+			"lon": 9.2,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple",
+			"lat": 37.6,
+			"lon": 72.9,
+			"category": "drops-veins"
+		},
+		{
+			"name": "10k/25k",
+			"lat": 73.7,
+			"lon": 12.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/50k",
+			"lat": 70.9,
+			"lon": 27.8,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow",
+			"lat": 91.3,
+			"lon": 24.6,
+			"category": "drops-veins"
+		},
+		{ "name": "Purple", "lat": 87, "lon": 39.7, "category": "drops-veins" },
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 74.4,
+			"lon": 35.9,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 68.1,
+			"lon": 35.7,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/10k/25k",
+			"lat": 75.8,
+			"lon": 42.3,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue",
+			"lat": 69.5,
+			"lon": 48.9,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Yellow/Blue",
+			"lat": 83.1,
+			"lon": 58.6,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 71.8,
+			"lon": 57.3,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 68.3,
+			"lon": 61.4,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple/Red/50k",
+			"lat": 62.7,
+			"lon": 75.1,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Red/Yellow/25k/50k",
+			"lat": 54.2,
+			"lon": 88.8,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Blue/10k",
+			"lat": 59.8,
+			"lon": 97.2,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Purple",
+			"lat": 45.3,
+			"lon": 91.5,
+			"category": "drops-veins"
+		},
+		{
+			"name": "Blue/10k",
+			"lat": 42.2,
+			"lon": 82.3,
+			"category": "drops-veins"
+		}
+	]
+}

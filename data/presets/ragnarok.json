@@ -1,0 +1,42 @@
+{
+	"obelisks": [
+		{
+			"name": "Red Obelisk",
+			"lat": 17.3,
+			"lon": 78.5,
+			"category": "obelisks"
+		},
+		{
+			"name": "Blue Obelisk",
+			"lat": 58.0,
+			"lon": 45.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Green Obelisk",
+			"lat": 24.0,
+			"lon": 24.0,
+			"category": "obelisks"
+		}
+	],
+	"caves": [
+		{
+			"name": "Jungle Dungeon",
+			"lat": 18.0,
+			"lon": 28.5,
+			"category": "caves"
+		},
+		{
+			"name": "Carnivorous Caverns",
+			"lat": 30.0,
+			"lon": 30.0,
+			"category": "caves"
+		},
+		{
+			"name": "Life's Labyrinth",
+			"lat": 54.5,
+			"lon": 68.0,
+			"category": "caves"
+		}
+	]
+}

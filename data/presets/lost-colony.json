@@ -1,0 +1,108 @@
+{
+	"outpost": [
+		{
+			"name": "Attack Outpost",
+			"lat": 40.33,
+			"lon": 66.69,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 36.43,
+			"lon": 63.72,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 36.1,
+			"lon": 58.49,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 37.61,
+			"lon": 58.7,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 33.69,
+			"lon": 79.19,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 40.09,
+			"lon": 72.29,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 38.31,
+			"lon": 56.85,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 48.75,
+			"lon": 56.85,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 44.33,
+			"lon": 60.0,
+			"category": "outpost"
+		},
+		{
+			"name": "Attack Outpost",
+			"lat": 43.57,
+			"lon": 56.09,
+			"category": "outpost"
+		},
+		{
+			"name": "Defense Outpost",
+			"lat": 68.41,
+			"lon": 22.97,
+			"category": "outpost"
+		},
+		{
+			"name": "Defense Outpost",
+			"lat": 98.96,
+			"lon": 14.43,
+			"category": "outpost"
+		},
+		{
+			"name": "Outpost Spawn",
+			"lat": 86.52,
+			"lon": 5.66,
+			"category": "outpost"
+		}
+	],
+	"danger": [
+		{
+			"name": "Gothic Metropolis (Thrall City)",
+			"lat": 42.0,
+			"lon": 62.0,
+			"category": "danger"
+		},
+		{
+			"name": "Aberrant Crash Site",
+			"lat": 75.0,
+			"lon": 30.0,
+			"category": "danger"
+		},
+		{
+			"name": "Twilight Forest",
+			"lat": 25.0,
+			"lon": 45.0,
+			"category": "danger"
+		},
+		{
+			"name": "Volcanic Crater (Power Core)",
+			"lat": 55.0,
+			"lon": 70.0,
+			"category": "danger"
+		}
+	]
+}

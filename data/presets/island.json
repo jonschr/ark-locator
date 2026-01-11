@@ -1,0 +1,203 @@
+{
+	"obelisks": [
+		{
+			"name": "Red Obelisk",
+			"lat": 20.5,
+			"lon": 82.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Blue Obelisk",
+			"lat": 25.0,
+			"lon": 25.3,
+			"category": "obelisks"
+		},
+		{
+			"name": "Green Obelisk",
+			"lat": 59.0,
+			"lon": 72.3,
+			"category": "obelisks"
+		}
+	],
+	"caves": [
+		{
+			"name": "Central Cave (Chitin)",
+			"lat": 41.5,
+			"lon": 46.9,
+			"category": "caves"
+		},
+		{
+			"name": "South Cave 1 (Hunter)",
+			"lat": 80.3,
+			"lon": 53.5,
+			"category": "caves"
+		},
+		{
+			"name": "South Cave 2 (Clever)",
+			"lat": 68.2,
+			"lon": 56.2,
+			"category": "caves"
+		},
+		{
+			"name": "Lava Cave (Massive)",
+			"lat": 70.6,
+			"lon": 86.1,
+			"category": "caves"
+		},
+		{
+			"name": "Swamp Cave (Immune)",
+			"lat": 62.7,
+			"lon": 37.3,
+			"category": "caves"
+		},
+		{
+			"name": "Snow Cave (Strong)",
+			"lat": 29.1,
+			"lon": 31.8,
+			"category": "caves"
+		},
+		{
+			"name": "North East Cave (Devourer)",
+			"lat": 14.7,
+			"lon": 85.4,
+			"category": "caves"
+		},
+		{
+			"name": "North West Cave (Skylord)",
+			"lat": 18.8,
+			"lon": 19.3,
+			"category": "caves"
+		},
+		{
+			"name": "Upper South Cave (Pack)",
+			"lat": 68.6,
+			"lon": 43.5,
+			"category": "caves"
+		},
+		{
+			"name": "Tek Cave (Overseer)",
+			"lat": 43.1,
+			"lon": 39.2,
+			"category": "caves"
+		}
+	],
+	"loot-crates": [
+		{
+			"name": "Deep sea loot crate",
+			"lat": 52.3,
+			"lon": 2.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 93.1,
+			"lon": 2.5,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 32.5,
+			"lon": 0.9,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 4.4,
+			"lon": 0.3,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 4.0,
+			"lon": 27.1,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 5.1,
+			"lon": 38.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 2.5,
+			"lon": 63.5,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 0.8,
+			"lon": 85.3,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 3.4,
+			"lon": 98.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 17.5,
+			"lon": 95.8,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 43.2,
+			"lon": 99.2,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 60.7,
+			"lon": 99.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 96.4,
+			"lon": 98.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 99.3,
+			"lon": 70.6,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 99.0,
+			"lon": 32.0,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 17.3,
+			"lon": 84.9,
+			"category": "loot-crates"
+		},
+		{
+			"name": "Deep sea loot crate",
+			"lat": 60.4,
+			"lon": 0.3,
+			"category": "loot-crates"
+		}
+	],
+	"danger": [
+		{
+			"name": "Redwood Forest",
+			"lat": 55,
+			"lon": 55,
+			"category": "danger"
+		},
+		{
+			"name": "Carnivore Island",
+			"lat": 42,
+			"lon": 90,
+			"category": "danger"
+		},
+		{ "name": "The Maw", "lat": 87, "lon": 90, "category": "danger" }
+	]
+}

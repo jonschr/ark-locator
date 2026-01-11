@@ -3,9 +3,11 @@ const { ipcRenderer } = require('electron');
 // ===========================================
 // STATE
 // ===========================================
-let currentMap = 'island';
+let currentMap = 'lost-colony';
 let userMarkers = {}; // { mapName: [marker, marker, ...] } - User-created markers only
-let categories = [
+let hiddenMarkers = {}; // { mapName: Set of marker IDs that are hidden }
+// Default categories template - shared across all maps initially
+const DEFAULT_CATEGORIES = [
 	{
 		id: 'default',
 		name: 'General',
@@ -17,70 +19,28 @@ let categories = [
 		id: 'bases',
 		name: 'Base Locations',
 		color: '#ff9800',
-		icon: 'https://r2.wikily.gg/images/ark/icons/ThatchFoundation_Icon.webp',
+		icon: null,
 		visible: true,
 	},
 	{
 		id: 'caves',
 		name: 'Caves',
 		color: '#9c27b0',
-		icon: 'https://r2.wikily.gg/images/ark/icons/Artifact_Icon.webp',
+		icon: null,
 		visible: true,
 	},
 	{
 		id: 'obelisks',
 		name: 'Obelisks',
 		color: '#00bcd4',
-		icon: 'https://r2.wikily.gg/images/ark/icons/Tribute_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'metal',
-		name: 'Metal',
-		color: '#78909c',
-		icon: 'https://r2.wikily.gg/images/ark/icons/MetalOre_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'crystal',
-		name: 'Crystal',
-		color: '#e1bee7',
-		icon: 'https://r2.wikily.gg/images/ark/icons/Crystal_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'obsidian',
-		name: 'Obsidian',
-		color: '#37474f',
-		icon: 'https://r2.wikily.gg/images/ark/icons/Obsidian_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'oil',
-		name: 'Oil',
-		color: '#212121',
-		icon: 'https://r2.wikily.gg/images/ark/icons/OilFuel_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'pearls',
-		name: 'Silica Pearls',
-		color: '#fff59d',
-		icon: 'https://r2.wikily.gg/images/ark/icons/Pearl_Icon.webp',
-		visible: true,
-	},
-	{
-		id: 'notes',
-		name: 'Explorer Notes',
-		color: '#ffcc80',
-		icon: 'https://r2.wikily.gg/images/ark/icons/NoteIcon.webp',
+		icon: null,
 		visible: true,
 	},
 	{
 		id: 'loot-crates',
 		name: 'Loot Crates',
 		color: '#2196f3',
-		icon: 'https://r2.wikily.gg/images/ark/icons/SupplyCrate_Icon.webp',
+		icon: null,
 		visible: true,
 	},
 	{
@@ -90,11 +50,12 @@ let categories = [
 		icon: null,
 		visible: true,
 	},
+	// Lost Colony locations
 	{
-		id: 'wyvern-eggs',
-		name: 'Wyvern Eggs',
-		color: '#e91e63',
-		icon: 'https://r2.wikily.gg/images/ark/icons/WyvernEgg_Icon.webp',
+		id: 'outpost',
+		name: 'Outposts',
+		color: '#ff6f00',
+		icon: null,
 		visible: true,
 	},
 	{
@@ -105,9 +66,71 @@ let categories = [
 		visible: true,
 	},
 ];
+
+// Per-map category overrides { mapName: { categoryId: { name?, color?, visible? }, ... }, mapName: { _custom: [custom categories] } }
+let mapCategories = {};
+
+// Get categories for the current map (merges defaults with map-specific overrides)
+function getCategories() {
+	const mapOverrides = mapCategories[currentMap] || {};
+	const customCats = mapOverrides._custom || [];
+
+	// Merge default categories with any per-map overrides
+	const merged = DEFAULT_CATEGORIES.map((cat) => {
+		const override = mapOverrides[cat.id];
+		if (override) {
+			return { ...cat, ...override };
+		}
+		return { ...cat };
+	});
+
+	// Custom categories first, then default categories
+	return [...customCats, ...merged];
+}
+
+// Update a category for the current map
+function updateCategory(categoryId, updates) {
+	if (!mapCategories[currentMap]) {
+		mapCategories[currentMap] = {};
+	}
+
+	// Check if it's a custom category
+	const customCats = mapCategories[currentMap]._custom || [];
+	const customIndex = customCats.findIndex((c) => c.id === categoryId);
+
+	if (customIndex >= 0) {
+		// Update custom category
+		customCats[customIndex] = { ...customCats[customIndex], ...updates };
+	} else {
+		// It's a default category - store override
+		mapCategories[currentMap][categoryId] = {
+			...(mapCategories[currentMap][categoryId] || {}),
+			...updates,
+		};
+	}
+
+	saveState();
+}
+
+// Add a custom category for the current map
+function addCustomCategory(category) {
+	if (!mapCategories[currentMap]) {
+		mapCategories[currentMap] = {};
+	}
+	if (!mapCategories[currentMap]._custom) {
+		mapCategories[currentMap]._custom = [];
+	}
+	mapCategories[currentMap]._custom.push(category);
+	saveState();
+}
+
 let selectedCategory = 'default';
 let pendingMarker = null;
 let editingMarkerIndex = null; // Track if we're editing an existing marker (user markers only)
+let editingPresetIndex = null; // Track if we're editing a preset marker
+
+// Per-map preset overrides { mapName: { presetIndex: { name?, category? } } }
+let presetOverrides = {};
 
 // Map zoom/pan state
 let mapScale = 1;
@@ -116,6 +139,7 @@ let mapOffsetY = 0;
 let isPanning = false;
 let panStartX = 0;
 let panStartY = 0;
+let highlightedMarkerEl = null; // Track currently highlighted marker
 let spacePressed = false;
 
 // Wikily.gg CDN base URL for maps
@@ -132,516 +156,61 @@ const mapImages = {
 	valguero: `${WIKILY_CDN}/maps/Valguero.webp`,
 	'genesis-1': `${WIKILY_CDN}/maps/Genesis.webp`,
 	'crystal-isles': `${WIKILY_CDN}/maps/CrystalIsles.webp`,
-	'genesis-2': `${WIKILY_CDN}/maps/Genesis.webp`,
+	'genesis-2': `${WIKILY_CDN}/maps/Genesis2.webp`,
 	'lost-island': `${WIKILY_CDN}/maps/LostIsland.webp`,
 	fjordur: `${WIKILY_CDN}/maps/Fjordur.webp`,
-	astraeos: 'assets/maps/astraeos.jpg', // Not available on wikily.gg
+	'lost-colony': `${WIKILY_CDN}/maps/LostColony.webp`,
+	astraeos: 'https://ark.wiki.gg/images/Astraeos_spawn_map.png',
 };
 
-// Preset locations for The Island (can be loaded as starting data)
-const presetLocations = {
-	island: {
-		obelisks: [
-			{ name: 'Red Obelisk', lat: 20.5, lon: 82.0, category: 'obelisks' },
-			{
-				name: 'Blue Obelisk',
-				lat: 25.0,
-				lon: 25.3,
-				category: 'obelisks',
-			},
-			{
-				name: 'Green Obelisk',
-				lat: 59.0,
-				lon: 72.3,
-				category: 'obelisks',
-			},
-		],
-		caves: [
-			{
-				name: 'Central Cave (Chitin)',
-				lat: 41.5,
-				lon: 46.9,
-				category: 'caves',
-			},
-			{
-				name: 'South Cave 1 (Hunter)',
-				lat: 80.3,
-				lon: 53.5,
-				category: 'caves',
-			},
-			{
-				name: 'South Cave 2 (Clever)',
-				lat: 68.2,
-				lon: 56.2,
-				category: 'caves',
-			},
-			{
-				name: 'Lava Cave (Massive)',
-				lat: 70.6,
-				lon: 86.1,
-				category: 'caves',
-			},
-			{
-				name: 'Swamp Cave (Immune)',
-				lat: 62.7,
-				lon: 37.3,
-				category: 'caves',
-			},
-			{
-				name: 'Snow Cave (Strong)',
-				lat: 29.1,
-				lon: 31.8,
-				category: 'caves',
-			},
-			{
-				name: 'North East Cave (Devourer)',
-				lat: 14.7,
-				lon: 85.4,
-				category: 'caves',
-			},
-			{
-				name: 'North West Cave (Skylord)',
-				lat: 18.8,
-				lon: 19.3,
-				category: 'caves',
-			},
-			{
-				name: 'Upper South Cave (Pack)',
-				lat: 68.6,
-				lon: 43.5,
-				category: 'caves',
-			},
-			{
-				name: 'Tek Cave (Overseer)',
-				lat: 43.1,
-				lon: 39.2,
-				category: 'caves',
-			},
-		],
-		'loot-crates': [
-			{
-				name: 'Deep sea loot crate',
-				lat: 52.3,
-				lon: 2.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 93.1,
-				lon: 2.5,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 32.5,
-				lon: 0.9,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 4.4,
-				lon: 0.3,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 4.0,
-				lon: 27.1,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 5.1,
-				lon: 38.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 2.5,
-				lon: 63.5,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 0.8,
-				lon: 85.3,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 3.4,
-				lon: 98.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 17.5,
-				lon: 95.8,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 43.2,
-				lon: 99.2,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 60.7,
-				lon: 99.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 96.4,
-				lon: 98.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 99.3,
-				lon: 70.6,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 99.0,
-				lon: 32.0,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 17.3,
-				lon: 84.9,
-				category: 'loot-crates',
-			},
-			{
-				name: 'Deep sea loot crate',
-				lat: 60.4,
-				lon: 0.3,
-				category: 'loot-crates',
-			},
-		],
-		danger: [
-			{ name: 'Redwood Forest', lat: 55, lon: 55, category: 'danger' },
-			{ name: 'Carnivore Island', lat: 42, lon: 90, category: 'danger' },
-			{ name: 'The Maw', lat: 87, lon: 90, category: 'danger' },
-		],
-	},
-	'scorched-earth': {
-		obelisks: [
-			{ name: 'Red Obelisk', lat: 22.0, lon: 68.0, category: 'obelisks' },
-			{
-				name: 'Blue Obelisk',
-				lat: 77.0,
-				lon: 75.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Green Obelisk',
-				lat: 27.0,
-				lon: 22.0,
-				category: 'obelisks',
-			},
-		],
-	},
-	aberration: {
-		obelisks: [
-			{
-				name: 'Surface Terminal 1',
-				lat: 15.0,
-				lon: 26.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Surface Terminal 2',
-				lat: 21.0,
-				lon: 56.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Surface Terminal 3',
-				lat: 5.0,
-				lon: 85.0,
-				category: 'obelisks',
-			},
-		],
-	},
-	extinction: {
-		obelisks: [
-			{
-				name: 'King Titan Terminal',
-				lat: 9.5,
-				lon: 40.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Desert Titan Terminal',
-				lat: 87.0,
-				lon: 71.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Ice Titan Terminal',
-				lat: 9.0,
-				lon: 64.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Forest Titan Terminal',
-				lat: 18.0,
-				lon: 62.0,
-				category: 'obelisks',
-			},
-		],
-		notes: [
-			{ name: 'Bob note', lat: 44.1, lon: 63.1, category: 'notes' },
-			{ name: 'Bob note', lat: 61.4, lon: 53.4, category: 'notes' },
-			{ name: 'Bob note', lat: 47.1, lon: 36.8, category: 'notes' },
-			{ name: 'Bob note', lat: 23.4, lon: 40.6, category: 'notes' },
-			{ name: 'Bob note', lat: 4.5, lon: 28.9, category: 'notes' },
-			{ name: 'Bob note', lat: 36.5, lon: 8.2, category: 'notes' },
-			{ name: 'Bob note', lat: 69.1, lon: 5.3, category: 'notes' },
-			{ name: 'Bob note', lat: 97, lon: 29.2, category: 'notes' },
-			{ name: 'Bob note', lat: 92, lon: 64.9, category: 'notes' },
-			{ name: 'Bob note', lat: 77.6, lon: 89.2, category: 'notes' },
-		],
-		'drops-veins': [
-			{ name: 'Purple', lat: 33.6, lon: 59.2, category: 'drops-veins' },
-			{ name: 'Purple', lat: 25.5, lon: 59.3, category: 'drops-veins' },
-			{
-				name: 'Red/25k/50k',
-				lat: 18.3,
-				lon: 56.1,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Purple/Red/25k/50k',
-				lat: 22.2,
-				lon: 46,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 26.8,
-				lon: 53.1,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 30.8,
-				lon: 52.7,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue/10k',
-				lat: 33,
-				lon: 46.8,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue/10k/25k',
-				lat: 31.7,
-				lon: 38.7,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue/10k/25k',
-				lat: 26.1,
-				lon: 38.1,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue/10k/25k',
-				lat: 23.1,
-				lon: 40,
-				category: 'drops-veins',
-			},
-			{ name: '50k', lat: 32.1, lon: 33.9, category: 'drops-veins' },
-			{
-				name: 'Yellow/Blue/10k/25k',
-				lat: 38.6,
-				lon: 29.8,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Purple/Red/50k',
-				lat: 33.8,
-				lon: 7.4,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Purple/Red/25k/50k',
-				lat: 18,
-				lon: 6.1,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow',
-				lat: 10.6,
-				lon: 13.2,
-				category: 'drops-veins',
-			},
-			{ name: 'Purple', lat: 42.4, lon: 7.2, category: 'drops-veins' },
-			{
-				name: 'Purple/Red/50k',
-				lat: 51.2,
-				lon: 13.6,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Purple/Red/50k',
-				lat: 53.2,
-				lon: 9.2,
-				category: 'drops-veins',
-			},
-			{ name: 'Purple', lat: 37.6, lon: 72.9, category: 'drops-veins' },
-			{ name: '10k/25k', lat: 73.7, lon: 12.1, category: 'drops-veins' },
-			{
-				name: 'Purple/Red/50k',
-				lat: 70.9,
-				lon: 27.8,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow',
-				lat: 91.3,
-				lon: 24.6,
-				category: 'drops-veins',
-			},
-			{ name: 'Purple', lat: 87, lon: 39.7, category: 'drops-veins' },
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 74.4,
-				lon: 35.9,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 68.1,
-				lon: 35.7,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/10k/25k',
-				lat: 75.8,
-				lon: 42.3,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue',
-				lat: 69.5,
-				lon: 48.9,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Yellow/Blue',
-				lat: 83.1,
-				lon: 58.6,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 71.8,
-				lon: 57.3,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 68.3,
-				lon: 61.4,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Purple/Red/50k',
-				lat: 62.7,
-				lon: 75.1,
-				category: 'drops-veins',
-			},
-			{
-				name: 'Red/Yellow/25k/50k',
-				lat: 54.2,
-				lon: 88.8,
-				category: 'drops-veins',
-			},
-			{ name: 'Blue/10k', lat: 59.8, lon: 97.2, category: 'drops-veins' },
-			{ name: 'Purple', lat: 45.3, lon: 91.5, category: 'drops-veins' },
-			{ name: 'Blue/10k', lat: 42.2, lon: 82.3, category: 'drops-veins' },
-		],
-	},
-	ragnarok: {
-		obelisks: [
-			{ name: 'Red Obelisk', lat: 17.3, lon: 78.5, category: 'obelisks' },
-			{
-				name: 'Blue Obelisk',
-				lat: 58.0,
-				lon: 45.0,
-				category: 'obelisks',
-			},
-			{
-				name: 'Green Obelisk',
-				lat: 24.0,
-				lon: 24.0,
-				category: 'obelisks',
-			},
-		],
-		caves: [
-			{ name: 'Jungle Dungeon', lat: 18.0, lon: 28.5, category: 'caves' },
-			{
-				name: 'Carnivorous Caverns',
-				lat: 30.0,
-				lon: 30.0,
-				category: 'caves',
-			},
-			{
-				name: "Life's Labyrinth",
-				lat: 54.5,
-				lon: 68.0,
-				category: 'caves',
-			},
-		],
-		'wyvern-eggs': [
-			{
-				name: 'Ice Wyvern - In a circle of trees',
-				lat: 37.7,
-				lon: 65.0,
-				category: 'wyvern-eggs',
-			},
-			{
-				name: 'Ice Wyvern - Open ground',
-				lat: 44.4,
-				lon: 58.9,
-				category: 'wyvern-eggs',
-			},
-			{
-				name: 'Ice Wyvern - Edge of a cliff',
-				lat: 47.0,
-				lon: 51.7,
-				category: 'wyvern-eggs',
-			},
-			{
-				name: 'Ice Wyvern - Hidden ledge',
-				lat: 33.5,
-				lon: 68.8,
-				category: 'wyvern-eggs',
-			},
-			{
-				name: 'Ice Wyvern - Rocky ledge',
-				lat: 42.8,
-				lon: 55.2,
-				category: 'wyvern-eggs',
-			},
-		],
-	},
-};
+// Preset locations - loaded from JSON files
+const presetLocations = {};
+
+// Load preset data from JSON files
+const path = require('path');
+const fs = require('fs');
+
+function loadPresetData() {
+	const presetsDir = path.join(__dirname, 'data', 'presets');
+	const mapNames = [
+		'island',
+		'scorched-earth',
+		'aberration',
+		'extinction',
+		'the-center',
+		'ragnarok',
+		'valguero',
+		'genesis-1',
+		'crystal-isles',
+		'genesis-2',
+		'lost-island',
+		'fjordur',
+		'lost-colony',
+		'astraeos',
+	];
+
+	mapNames.forEach((mapName) => {
+		const filePath = path.join(presetsDir, `${mapName}.json`);
+		try {
+			if (fs.existsSync(filePath)) {
+				const data = fs.readFileSync(filePath, 'utf8');
+				presetLocations[mapName] = JSON.parse(data);
+			}
+		} catch (err) {
+			console.warn(`Could not load presets for ${mapName}:`, err.message);
+		}
+	});
+}
+
+// Load presets immediately
+loadPresetData();
 
 // ===========================================
 // DOM ELEMENTS
 // ===========================================
 const sidebar = document.getElementById('sidebar');
-const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+const sidebarResize = document.getElementById('sidebar-resize');
 const mapSelect = document.getElementById('map-select');
-const categoryList = document.getElementById('category-list');
 const addCategoryBtn = document.getElementById('add-category-btn');
 const waypointCount = document.getElementById('waypoint-count');
 const waypointList = document.getElementById('waypoint-list');
@@ -673,10 +242,16 @@ const saveMarkerBtn = document.getElementById('save-marker');
 const deleteMarkerBtn = document.getElementById('delete-marker-btn');
 
 const categoryModal = document.getElementById('category-modal');
+const categoryModalTitle = document.getElementById('category-modal-title');
 const categoryNameInput = document.getElementById('category-name');
 const categoryColorInput = document.getElementById('category-color');
 const cancelCategoryBtn = document.getElementById('cancel-category');
 const saveCategoryBtn = document.getElementById('save-category');
+let editingCategoryId = null; // Track if editing an existing category
+
+const helpModal = document.getElementById('help-modal');
+const helpBtn = document.getElementById('help-btn');
+const closeHelpBtn = document.getElementById('close-help');
 
 // Collapsible sections
 document.querySelectorAll('.collapsible-header').forEach((header) => {
@@ -692,20 +267,42 @@ document.addEventListener('DOMContentLoaded', () => {
 	loadState();
 	setupEventListeners();
 	loadMap(currentMap);
-	renderCategories();
+	updateCategorySelect();
 	renderWaypoints();
 });
 
 function setupEventListeners() {
-	// Sidebar toggle
-	toggleSidebarBtn.addEventListener('click', () => {
-		sidebar.classList.toggle('collapsed');
+	// Sidebar resize
+	let isResizing = false;
+	sidebarResize.addEventListener('mousedown', (e) => {
+		isResizing = true;
+		sidebarResize.classList.add('resizing');
+		document.body.style.cursor = 'ew-resize';
+		document.body.style.userSelect = 'none';
+	});
+
+	document.addEventListener('mousemove', (e) => {
+		if (!isResizing) return;
+		const newWidth = e.clientX;
+		if (newWidth >= 250 && newWidth <= 800) {
+			sidebar.style.width = newWidth + 'px';
+		}
+	});
+
+	document.addEventListener('mouseup', () => {
+		if (isResizing) {
+			isResizing = false;
+			sidebarResize.classList.remove('resizing');
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+		}
 	});
 
 	// Map selection
 	mapSelect.addEventListener('change', (e) => {
 		currentMap = e.target.value;
 		loadMap(currentMap);
+		updateCategorySelect();
 		renderWaypoints();
 		saveState();
 	});
@@ -715,41 +312,89 @@ function setupEventListeners() {
 	cancelCategoryBtn.addEventListener('click', closeCategoryModal);
 	saveCategoryBtn.addEventListener('click', saveCategory);
 
+	// Show all / Hide all category visibility
+	document.getElementById('show-all-btn').addEventListener('click', () => {
+		toggleAllCategoriesVisibility(true);
+	});
+	document.getElementById('hide-all-btn').addEventListener('click', () => {
+		toggleAllCategoriesVisibility(false);
+	});
+
 	// Marker management
 	cancelMarkerBtn.addEventListener('click', closeMarkerModal);
 	saveMarkerBtn.addEventListener('click', saveMarker);
 	deleteMarkerBtn.addEventListener('click', deleteCurrentMarker);
 
+	// Help modal
+	helpBtn.addEventListener('click', () =>
+		helpModal.classList.remove('hidden')
+	);
+	closeHelpBtn.addEventListener('click', () =>
+		helpModal.classList.add('hidden')
+	);
+	helpModal.addEventListener('click', (e) => {
+		if (e.target === helpModal) helpModal.classList.add('hidden');
+	});
+
+	// Clear data button
+	document.getElementById('clear-data-btn').addEventListener('click', () => {
+		if (
+			confirm(
+				'This will delete all your custom markers, categories, and settings. Are you sure?'
+			)
+		) {
+			localStorage.removeItem('arkLocatorState');
+			// Reset state
+			userMarkers = {};
+			mapCategories = {};
+			presetOverrides = {};
+			hiddenMarkers = {};
+			currentMap = 'lost-colony';
+			mapSelect.value = currentMap;
+			loadMap(currentMap);
+			updateCategorySelect();
+			renderWaypoints();
+			helpModal.classList.add('hidden');
+			alert('All data has been cleared.');
+		}
+	});
+
 	// Map interactions
-	mapViewport.addEventListener('click', handleMapClick);
+	mapViewport.addEventListener('dblclick', handleMapDblClick);
 	mapViewport.addEventListener('mousemove', handleMapMouseMove);
 	mapViewport.addEventListener('mousedown', handleMapMouseDown);
 	mapViewport.addEventListener('mouseup', handleMapMouseUp);
 	mapViewport.addEventListener('mouseleave', handleMapMouseUp);
-	mapViewport.addEventListener('wheel', handleMapWheel);
+	mapViewport.addEventListener('wheel', handleMapWheel, { passive: false });
 	mapViewport.addEventListener('contextmenu', (e) => e.preventDefault());
+
+	// Clear marker highlight on click anywhere on map (not on a marker)
+	mapViewport.addEventListener('click', (e) => {
+		if (!e.target.closest('.map-marker') && highlightedMarkerEl) {
+			highlightedMarkerEl.classList.remove('highlighted');
+			highlightedMarkerEl = null;
+		}
+	});
 
 	// Keyboard events for panning
 	document.addEventListener('keydown', handleKeyDown);
 	document.addEventListener('keyup', handleKeyUp);
 
-	// Zoom controls
-	zoomInBtn.addEventListener('click', () => zoomMap(1.2));
-	zoomOutBtn.addEventListener('click', () => zoomMap(0.8));
+	// Zoom controls - smaller steps for smoother zooming
+	zoomInBtn.addEventListener('click', () => zoomMap(1.15));
+	zoomOutBtn.addEventListener('click', () => zoomMap(0.87));
 	zoomResetBtn.addEventListener('click', resetMapView);
 
-	// Refresh button
-	refreshBtn.addEventListener('click', () => location.reload());
+	// Refresh button - full app restart
+	refreshBtn.addEventListener('click', () => {
+		// Send restart signal to main process
+		ipcRenderer.send('restart-app');
+	});
 
 	// Import/Export
 	browseBtn.addEventListener('click', browseForFile);
 	importBtn.addEventListener('click', importWaypoints);
 	exportBtn.addEventListener('click', exportWaypoints);
-
-	// Load Presets
-	document
-		.getElementById('load-presets-btn')
-		.addEventListener('click', loadMapPresets);
 }
 
 // ===========================================
@@ -784,14 +429,32 @@ function resetMapView() {
 	mapOffsetX = 0;
 	mapOffsetY = 0;
 	updateMapTransform();
+	renderMapMarkers();
+}
+
+function getMinScale() {
+	// Calculate minimum scale so image edges touch viewport edges (like background-size: contain)
+	if (!mapImage.naturalWidth || !mapImage.naturalHeight) return 0.1;
+
+	const rect = mapViewport.getBoundingClientRect();
+	const scaleX = rect.width / mapImage.naturalWidth;
+	const scaleY = rect.height / mapImage.naturalHeight;
+
+	// Use the larger of the two to ensure both edges are covered
+	return Math.max(scaleX, scaleY);
 }
 
 function zoomMap(factor) {
 	const newScale = mapScale * factor;
-	if (newScale >= 0.5 && newScale <= 5) {
+	const minScale = getMinScale();
+
+	if (newScale >= minScale && newScale <= 10) {
 		mapScale = newScale;
 		updateMapTransform();
-		renderMapMarkers();
+		// Use requestAnimationFrame to sync marker updates with transform
+		requestAnimationFrame(() => {
+			renderMapMarkers();
+		});
 	}
 }
 
@@ -801,14 +464,18 @@ function updateMapTransform() {
 
 function handleMapWheel(e) {
 	e.preventDefault();
-	const factor = e.deltaY > 0 ? 0.9 : 1.1;
+	// Smaller zoom steps for smoother zooming
+	const factor = e.deltaY > 0 ? 0.95 : 1.05;
 	zoomMap(factor);
 }
 
 function handleKeyDown(e) {
 	if (e.code === 'Space' && !spacePressed) {
 		spacePressed = true;
-		mapViewport.style.cursor = 'grab';
+		// Space still works for panning (grab cursor indicates ready to pan)
+		if (!isPanning) {
+			mapViewport.style.cursor = 'grab';
+		}
 	}
 }
 
@@ -816,14 +483,14 @@ function handleKeyUp(e) {
 	if (e.code === 'Space') {
 		spacePressed = false;
 		if (!isPanning) {
-			mapViewport.style.cursor = 'crosshair';
+			mapViewport.style.cursor = 'grab';
 		}
 	}
 }
 
 function handleMapMouseDown(e) {
-	// Pan with middle mouse button, right mouse button, or space+left click
-	if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed)) {
+	// Left click, middle mouse button, or right mouse button to pan
+	if (e.button === 0 || e.button === 1 || e.button === 2) {
 		e.preventDefault();
 		isPanning = true;
 		panStartX = e.clientX - mapOffsetX;
@@ -835,7 +502,7 @@ function handleMapMouseDown(e) {
 function handleMapMouseUp(e) {
 	if (isPanning) {
 		isPanning = false;
-		mapViewport.style.cursor = spacePressed ? 'grab' : 'crosshair';
+		mapViewport.style.cursor = 'grab';
 	}
 }
 
@@ -853,14 +520,15 @@ function handleMapMouseMove(e) {
 		mapOffsetX = e.clientX - panStartX;
 		mapOffsetY = e.clientY - panStartY;
 		updateMapTransform();
-		renderMapMarkers();
+		// Use requestAnimationFrame for smoother marker updates during pan
+		requestAnimationFrame(() => {
+			renderMapMarkers();
+		});
 	}
 }
 
-function handleMapClick(e) {
-	// Don't add marker if we were panning or space is held
-	if (isPanning || spacePressed) return;
-	// Only handle left click
+function handleMapDblClick(e) {
+	// Only handle left double-click
 	if (e.button !== 0) return;
 
 	const coords = pixelToCoords(e.clientX, e.clientY);
@@ -921,130 +589,233 @@ function coordsToPixel(lat, lon) {
 }
 
 // ===========================================
-// MARKERS
+// MARKERS - Helper functions
+// ===========================================
+
+// Generate unique ID for a marker
+function getMarkerId(marker, index, isPreset) {
+	if (isPreset) {
+		// For presets, use category + coords as stable ID
+		return `preset-${marker.category}-${marker.lat}-${marker.lon}`;
+	} else {
+		// For user markers, use createdAt or index
+		return marker.id || `user-${marker.createdAt || index}`;
+	}
+}
+
+// Check if a marker is hidden
+function isMarkerHidden(markerId) {
+	const hidden = hiddenMarkers[currentMap];
+	return hidden && hidden.has(markerId);
+}
+
+// Toggle marker visibility
+function toggleMarkerVisibility(markerId) {
+	if (!hiddenMarkers[currentMap]) {
+		hiddenMarkers[currentMap] = new Set();
+	}
+
+	if (hiddenMarkers[currentMap].has(markerId)) {
+		hiddenMarkers[currentMap].delete(markerId);
+	} else {
+		hiddenMarkers[currentMap].add(markerId);
+	}
+
+	renderMapMarkers();
+	renderWaypoints();
+	saveState();
+}
+
+// Get preset markers for current map (read-only, built-in)
+function getPresetMarkers(mapName) {
+	const presets = presetLocations[mapName];
+	if (!presets) return [];
+
+	const mapOverrides = presetOverrides[mapName] || {};
+	const markers = [];
+
+	Object.entries(presets).forEach(([categoryKey, categoryMarkers]) => {
+		categoryMarkers.forEach((preset, idx) => {
+			const markerId = `preset-${preset.category}-${preset.lat}-${preset.lon}`;
+			const override = mapOverrides[markerId] || {};
+			markers.push({
+				...preset,
+				...override, // Apply any user overrides
+				isPreset: true,
+				id: markerId,
+				originalCategory: preset.category, // Keep original for reference
+			});
+		});
+	});
+	return markers;
+}
+
+// Get all markers (presets + user) for current map
+function getAllMarkers(mapName) {
+	const presets = getPresetMarkers(mapName);
+	const user = (userMarkers[mapName] || []).map((m, idx) => ({
+		...m,
+		id: m.id || `user-${m.createdAt || idx}`,
+		isPreset: false,
+	}));
+	return [...presets, ...user];
+}
+
+// Get user marker index from combined index
+function getUserMarkerIndex(combinedIndex) {
+	const presetCount = getPresetMarkers(currentMap).length;
+	if (combinedIndex < presetCount) return null; // It's a preset
+	return combinedIndex - presetCount;
+}
+
+// ===========================================
+// MARKERS - Rendering
 // ===========================================
 function renderMapMarkers() {
 	markersLayer.innerHTML = '';
 
-	const mapMarkers = markers[currentMap] || [];
+	const allMarkers = getAllMarkers(currentMap);
+	const categories = getCategories();
 
-	mapMarkers.forEach((marker, index) => {
+	allMarkers.forEach((marker, index) => {
 		const category = categories.find((c) => c.id === marker.category);
+		// Skip if category is hidden
 		if (!category || !category.visible) return;
+		// Skip if individual marker is hidden
+		if (isMarkerHidden(marker.id)) return;
 
 		const pos = coordsToPixel(marker.lat, marker.lon);
 		if (!pos) return;
 
 		const markerEl = document.createElement('div');
-		markerEl.className = 'map-marker';
+		markerEl.className = `map-marker${marker.isPreset ? ' preset' : ''}`;
 		markerEl.style.left = `${pos.x}px`;
 		markerEl.style.top = `${pos.y}px`;
 		markerEl.dataset.index = index;
+		markerEl.dataset.isPreset = marker.isPreset ? 'true' : 'false';
+		markerEl.dataset.markerId = marker.id;
 
 		// Use icon if category has one, otherwise use colored pin
 		const markerInner = category.icon
 			? `<img src="${category.icon}" class="marker-icon" alt="" onerror="this.outerHTML='<div class=\\'marker-pin\\' style=\\'background-color: ${category.color}\\'></div>'">`
 			: `<div class="marker-pin" style="background-color: ${category.color}"></div>`;
 
+		// Include coords in label for all markers (shown on hover via CSS)
+		const labelText = `${escapeHtml(
+			marker.name
+		)}<span class="marker-coords">${marker.lat.toFixed(
+			1
+		)}, ${marker.lon.toFixed(1)}</span>`;
+
 		markerEl.innerHTML = `
 			${markerInner}
-			<div class="marker-label">${escapeHtml(marker.name)}</div>
+			<div class="marker-label">${labelText}</div>
 		`;
 
-		// Click to edit marker
+		// Hover handler for all markers - persistent highlight with coords
+		markerEl.addEventListener('mouseenter', () => {
+			// Clear previous highlight
+			if (highlightedMarkerEl && highlightedMarkerEl !== markerEl) {
+				highlightedMarkerEl.classList.remove('highlighted');
+			}
+			// Set new highlight
+			markerEl.classList.add('highlighted');
+			highlightedMarkerEl = markerEl;
+		});
+
+		// Click handler - edit marker (user markers only, presets just pan)
 		markerEl.addEventListener('click', (e) => {
 			e.stopPropagation();
-			openEditMarkerModal(index);
+			// Clear highlight on click
+			if (highlightedMarkerEl) {
+				highlightedMarkerEl.classList.remove('highlighted');
+				highlightedMarkerEl = null;
+			}
+			if (marker.isPreset) {
+				// Just pan to the marker for presets (not editable)
+				panToMarker(marker.lat, marker.lon);
+			} else {
+				const userIndex = getUserMarkerIndex(index);
+				if (userIndex !== null) {
+					openEditMarkerModal(userIndex);
+				}
+			}
 		});
 
 		markersLayer.appendChild(markerEl);
 	});
 }
 
+function showPresetInfo(marker) {
+	const categories = getCategories();
+	const category =
+		categories.find((c) => c.id === marker.category) || categories[0];
+	// Just highlight and pan to the marker
+	panToMarker(marker.lat, marker.lon);
+}
+
 function addMarker(marker) {
-	if (!markers[currentMap]) {
-		markers[currentMap] = [];
+	if (!userMarkers[currentMap]) {
+		userMarkers[currentMap] = [];
 	}
-	markers[currentMap].push(marker);
+	userMarkers[currentMap].push(marker);
 	renderMapMarkers();
 	renderWaypoints();
 	saveState();
 }
 
-function deleteMarker(index) {
-	if (markers[currentMap]) {
-		markers[currentMap].splice(index, 1);
+function deleteMarker(userIndex) {
+	if (userMarkers[currentMap] && userMarkers[currentMap][userIndex]) {
+		userMarkers[currentMap].splice(userIndex, 1);
 		renderMapMarkers();
 		renderWaypoints();
 		saveState();
 	}
 }
 
-function highlightWaypoint(index) {
+function highlightWaypoint(markerId) {
 	const items = waypointList.querySelectorAll('.waypoint-item');
-	items.forEach((item, i) => {
-		item.style.background = i === index ? 'rgba(0, 217, 255, 0.2)' : '';
+	items.forEach((item) => {
+		item.style.background =
+			item.dataset.markerId === markerId ? 'rgba(0, 217, 255, 0.2)' : '';
 	});
+
+	// Also expand the category if collapsed
+	const targetItem = waypointList.querySelector(
+		`.waypoint-item[data-marker-id="${markerId}"]`
+	);
+	if (targetItem) {
+		const category = targetItem.closest('.waypoint-category');
+		if (category && category.classList.contains('collapsed')) {
+			category.classList.remove('collapsed');
+		}
+		targetItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+	}
 }
 
 // ===========================================
 // CATEGORIES
 // ===========================================
-function renderCategories() {
-	categoryList.innerHTML = categories
-		.map((cat) => {
-			const iconHtml = cat.icon
-				? `<img src="${cat.icon}" class="category-icon" alt="" onerror="this.style.display='none'">`
-				: `<div class="category-color" style="background-color: ${cat.color}"></div>`;
-			return `
-			<div class="category-item ${
-				cat.id === selectedCategory ? 'active' : ''
-			}" data-id="${cat.id}">
-				${iconHtml}
-				<span class="category-name">${escapeHtml(cat.name)}</span>
-				<span class="category-count">${getMarkerCountForCategory(cat.id)}</span>
-				<button class="category-visibility ${
-					cat.visible ? '' : 'hidden-cat'
-				}" data-id="${cat.id}">
-					${cat.visible ? '👁' : '👁‍🗨'}
-				</button>
-			</div>
-		`;
-		})
-		.join('');
-
-	// Add click handlers
-	categoryList.querySelectorAll('.category-item').forEach((item) => {
-		item.addEventListener('click', (e) => {
-			if (e.target.classList.contains('category-visibility')) return;
-			selectedCategory = item.dataset.id;
-			renderCategories();
-		});
-	});
-
-	categoryList.querySelectorAll('.category-visibility').forEach((btn) => {
-		btn.addEventListener('click', (e) => {
-			e.stopPropagation();
-			const catId = btn.dataset.id;
-			const cat = categories.find((c) => c.id === catId);
-			if (cat) {
-				cat.visible = !cat.visible;
-				renderCategories();
-				renderMapMarkers();
-				saveState();
-			}
-		});
-	});
-
-	// Update marker category select
+function updateCategorySelect() {
+	// Update marker category select dropdown
+	const categories = getCategories();
 	markerCategorySelect.innerHTML = categories
 		.map((cat) => `<option value="${cat.id}">${cat.name}</option>`)
 		.join('');
 }
 
 function getMarkerCountForCategory(categoryId) {
-	const mapMarkers = markers[currentMap] || [];
-	return mapMarkers.filter((m) => m.category === categoryId).length;
+	const allMarkers = getAllMarkers(currentMap);
+	return allMarkers.filter((m) => m.category === categoryId).length;
+}
+
+function toggleAllCategoriesVisibility(visible) {
+	const categories = getCategories();
+	categories.forEach((cat) => {
+		updateCategory(cat.id, { visible });
+	});
+	renderMapMarkers();
+	renderWaypoints();
 }
 
 function openCategoryModal() {
@@ -1053,8 +824,22 @@ function openCategoryModal() {
 	categoryModal.classList.remove('hidden');
 }
 
+function openEditCategoryModal(categoryId) {
+	const categories = getCategories();
+	const cat = categories.find((c) => c.id === categoryId);
+	if (!cat) return;
+
+	editingCategoryId = categoryId;
+	categoryModalTitle.textContent = 'Edit Category';
+	categoryNameInput.value = cat.name;
+	categoryColorInput.value = cat.color;
+	categoryModal.classList.remove('hidden');
+}
+
 function closeCategoryModal() {
 	categoryModal.classList.add('hidden');
+	editingCategoryId = null;
+	categoryModalTitle.textContent = 'Add Category';
 }
 
 function saveCategory() {
@@ -1063,74 +848,224 @@ function saveCategory() {
 
 	if (!name) return;
 
-	const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-	categories.push({ id, name, color, icon: null, visible: true });
+	if (editingCategoryId) {
+		// Editing existing category
+		updateCategory(editingCategoryId, { name, color });
+	} else {
+		// Adding new category
+		const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
+		addCustomCategory({ id, name, color, icon: null, visible: true });
+	}
 
-	renderCategories();
+	updateCategorySelect();
+	renderMapMarkers();
+	renderWaypoints();
 	closeCategoryModal();
-	saveState();
 }
 
 // ===========================================
 // WAYPOINTS LIST
 // ===========================================
 function renderWaypoints() {
-	const mapMarkers = markers[currentMap] || [];
-	waypointCount.textContent = `${mapMarkers.length} marker${
-		mapMarkers.length !== 1 ? 's' : ''
-	}`;
+	const allMarkers = getAllMarkers(currentMap);
+	const categories = getCategories();
 
-	if (mapMarkers.length === 0) {
+	// Count only visible markers (category visible AND marker not individually hidden)
+	const visibleMarkers = allMarkers.filter((marker) => {
+		const category = categories.find((c) => c.id === marker.category);
+		if (!category || !category.visible) return false;
+		if (isMarkerHidden(marker.id)) return false;
+		return true;
+	});
+
+	waypointCount.textContent = `${visibleMarkers.length} marker${
+		visibleMarkers.length !== 1 ? 's' : ''
+	} visible`;
+
+	if (allMarkers.length === 0) {
 		waypointList.innerHTML =
-			'<p class="empty-state">Click on the map to add markers</p>';
+			'<p class="empty-state">Double-click on the map to add markers</p>';
 		return;
 	}
 
-	waypointList.innerHTML = mapMarkers
-		.map((marker, index) => {
-			const category =
-				categories.find((c) => c.id === marker.category) ||
-				categories[0];
-			return `
-			<div class="waypoint-item" data-index="${index}">
-				<div class="marker-dot" style="background-color: ${category.color}"></div>
-				<span class="name">${escapeHtml(marker.name)}</span>
-				<span class="coords">${marker.lat.toFixed(1)}, ${marker.lon.toFixed(1)}</span>
-				<div class="waypoint-actions">
-					<button class="edit-btn" data-index="${index}" title="Edit">✎</button>
-					<button class="delete-btn" data-index="${index}" title="Delete">✕</button>
+	// Group markers by category
+	const markersByCategory = {};
+	allMarkers.forEach((marker, index) => {
+		const catId = marker.category || 'default';
+		if (!markersByCategory[catId]) {
+			markersByCategory[catId] = [];
+		}
+		markersByCategory[catId].push({ marker, index });
+	});
+
+	// Build HTML grouped by category
+	let html = '';
+	categories.forEach((cat) => {
+		const categoryMarkers = markersByCategory[cat.id] || [];
+		if (categoryMarkers.length === 0) return;
+
+		const visibleCount = categoryMarkers.filter(
+			({ marker }) => !isMarkerHidden(marker.id)
+		).length;
+
+		const iconHtml = cat.icon
+			? `<img src="${
+					cat.icon
+			  }" class="category-icon-small category-visibility-toggle ${
+					cat.visible ? '' : 'hidden-cat'
+			  }" data-category="${cat.id}" title="${
+					cat.visible ? 'Hide category' : 'Show category'
+			  }" alt="" onerror="this.style.display='none'">`
+			: `<div class="category-dot category-visibility-toggle ${
+					cat.visible ? '' : 'hidden-cat'
+			  }" style="background-color: ${cat.color}" data-category="${
+					cat.id
+			  }" title="${
+					cat.visible ? 'Hide category' : 'Show category'
+			  }"></div>`;
+
+		html += `
+			<div class="waypoint-category collapsed" data-category="${cat.id}">
+				<div class="waypoint-category-header" data-category="${cat.id}">
+					${iconHtml}
+					<span class="category-title">${escapeHtml(cat.name)}</span>
+					<button class="category-edit-btn" data-category="${
+						cat.id
+					}" title="Edit category">✎</button>
+					<span class="category-marker-count">${visibleCount}/${
+			categoryMarkers.length
+		}</span>
+					<span class="category-expand-icon">▼</span>
+				</div>
+				<div class="waypoint-category-items">
+		`;
+
+		categoryMarkers.forEach(({ marker, index }) => {
+			const isPreset = marker.isPreset;
+			const userIndex = isPreset ? null : getUserMarkerIndex(index);
+			const isHidden = isMarkerHidden(marker.id);
+
+			html += `
+				<div class="waypoint-item${isPreset ? ' preset' : ''}${
+				isHidden ? ' hidden-marker' : ''
+			}" 
+					 data-index="${index}" 
+					 data-user-index="${userIndex}" 
+					 data-is-preset="${isPreset}"
+					 data-marker-id="${marker.id}">
+					<button class="marker-visibility-btn${isHidden ? ' hidden-marker' : ''}" 
+							data-marker-id="${marker.id}" 
+							title="${isHidden ? 'Show marker' : 'Hide marker'}">
+						${isHidden ? '○' : '●'}
+					</button>
+					<span class="name">${escapeHtml(marker.name)}${
+				isPreset ? ' <span class="preset-badge">preset</span>' : ''
+			}</span>
+					<span class="coords">${marker.lat.toFixed(1)}, ${marker.lon.toFixed(1)}</span>
+					${
+						!isPreset
+							? `
+					<div class="waypoint-actions">
+						<button class="edit-btn" data-user-index="${userIndex}" title="Edit">✎</button>
+						<button class="delete-btn" data-user-index="${userIndex}" title="Delete">✕</button>
+					</div>
+					`
+							: ''
+					}
+				</div>
+			`;
+		});
+
+		html += `
 				</div>
 			</div>
 		`;
-		})
-		.join('');
+	});
 
-	// Add click handlers for waypoint items (pan to marker)
+	waypointList.innerHTML = html;
+
+	// Category header click - expand/collapse
+	waypointList
+		.querySelectorAll('.waypoint-category-header')
+		.forEach((header) => {
+			header.addEventListener('click', (e) => {
+				if (e.target.closest('.category-visibility-toggle')) return;
+				if (e.target.closest('.category-edit-btn')) return;
+				const category = header.closest('.waypoint-category');
+				category.classList.toggle('collapsed');
+			});
+		});
+
+	// Category edit button
+	waypointList.querySelectorAll('.category-edit-btn').forEach((btn) => {
+		btn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const catId = btn.dataset.category;
+			openEditCategoryModal(catId);
+		});
+	});
+
+	// Category visibility toggle (clicking the dot/icon)
+	waypointList
+		.querySelectorAll('.category-visibility-toggle')
+		.forEach((el) => {
+			el.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const catId = el.dataset.category;
+				const cat = categories.find((c) => c.id === catId);
+				if (cat) {
+					updateCategory(catId, { visible: !cat.visible });
+					renderMapMarkers();
+					renderWaypoints();
+				}
+			});
+		});
+
+	// Individual marker visibility toggle
+	waypointList.querySelectorAll('.marker-visibility-btn').forEach((btn) => {
+		btn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const markerId = btn.dataset.markerId;
+			toggleMarkerVisibility(markerId);
+		});
+	});
+
+	// Waypoint item click - pan to marker
 	waypointList.querySelectorAll('.waypoint-item').forEach((item) => {
 		item.addEventListener('click', (e) => {
-			if (e.target.closest('.waypoint-actions')) return;
+			if (
+				e.target.closest('.waypoint-actions') ||
+				e.target.closest('.marker-visibility-btn')
+			)
+				return;
 			const index = parseInt(item.dataset.index);
-			const marker = mapMarkers[index];
-			if (marker) {
+			const marker = allMarkers[index];
+			if (marker && !isMarkerHidden(marker.id)) {
 				panToMarker(marker.lat, marker.lon);
-				highlightWaypoint(index);
+				highlightWaypoint(item.dataset.markerId);
 			}
 		});
 	});
 
-	// Edit button handlers
+	// Edit button handlers (user markers only)
 	waypointList.querySelectorAll('.edit-btn').forEach((btn) => {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			openEditMarkerModal(parseInt(btn.dataset.index));
+			const userIndex = parseInt(btn.dataset.userIndex);
+			if (!isNaN(userIndex)) {
+				openEditMarkerModal(userIndex);
+			}
 		});
 	});
 
-	// Delete button handlers
+	// Delete button handlers (user markers only)
 	waypointList.querySelectorAll('.delete-btn').forEach((btn) => {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			deleteMarker(parseInt(btn.dataset.index));
+			const userIndex = parseInt(btn.dataset.userIndex);
+			if (!isNaN(userIndex)) {
+				deleteMarker(userIndex);
+			}
 		});
 	});
 }
@@ -1169,11 +1104,12 @@ function openMarkerModal(lat, lon) {
 }
 
 function openEditMarkerModal(index) {
-	const mapMarkers = markers[currentMap] || [];
+	const mapMarkers = userMarkers[currentMap] || [];
 	const marker = mapMarkers[index];
 	if (!marker) return;
 
 	editingMarkerIndex = index;
+	editingPresetIndex = null;
 	pendingMarker = { lat: marker.lat, lon: marker.lon };
 
 	markerModalTitle.textContent = 'Edit Marker';
@@ -1188,10 +1124,34 @@ function openEditMarkerModal(index) {
 	markerNameInput.select();
 }
 
+function openEditPresetMarkerModal(marker, combinedIndex) {
+	editingMarkerIndex = null;
+	editingPresetIndex = marker.id; // Store the marker ID for preset overrides
+	pendingMarker = { lat: marker.lat, lon: marker.lon };
+
+	markerModalTitle.textContent = 'Edit Preset Marker';
+	markerNameInput.value = marker.name;
+	markerLatInput.value = marker.lat.toFixed(1);
+	markerLonInput.value = marker.lon.toFixed(1);
+	markerCategorySelect.value = marker.category;
+	// Disable lat/lon editing for presets, hide delete button
+	markerLatInput.disabled = true;
+	markerLonInput.disabled = true;
+	deleteMarkerBtn.classList.add('hidden');
+
+	markerModal.classList.remove('hidden');
+	markerNameInput.focus();
+	markerNameInput.select();
+}
+
 function closeMarkerModal() {
 	markerModal.classList.add('hidden');
 	pendingMarker = null;
 	editingMarkerIndex = null;
+	editingPresetIndex = null;
+	// Re-enable lat/lon inputs
+	markerLatInput.disabled = false;
+	markerLonInput.disabled = false;
 }
 
 function saveMarker() {
@@ -1202,9 +1162,15 @@ function saveMarker() {
 
 	if (isNaN(lat) || isNaN(lon)) return;
 
-	if (editingMarkerIndex !== null) {
-		// Update existing marker
-		const mapMarkers = markers[currentMap] || [];
+	if (editingPresetIndex !== null) {
+		// Update preset marker override
+		if (!presetOverrides[currentMap]) {
+			presetOverrides[currentMap] = {};
+		}
+		presetOverrides[currentMap][editingPresetIndex] = { name, category };
+	} else if (editingMarkerIndex !== null) {
+		// Update existing user marker
+		const mapMarkers = userMarkers[currentMap] || [];
 		if (mapMarkers[editingMarkerIndex]) {
 			mapMarkers[editingMarkerIndex].name = name;
 			mapMarkers[editingMarkerIndex].category = category;
@@ -1225,7 +1191,7 @@ function saveMarker() {
 
 	renderMapMarkers();
 	renderWaypoints();
-	renderCategories();
+	updateCategorySelect();
 	saveState();
 	closeMarkerModal();
 }
@@ -1266,12 +1232,12 @@ async function importWaypoints() {
 		if (data.waypoints) {
 			// Our export format
 			if (data.mapName && data.waypoints) {
-				markers[data.mapName] = data.waypoints;
+				userMarkers[data.mapName] = data.waypoints;
 			} else if (Array.isArray(data.waypoints)) {
-				markers[currentMap] = data.waypoints;
+				userMarkers[currentMap] = data.waypoints;
 			}
 		} else if (Array.isArray(data)) {
-			markers[currentMap] = data;
+			userMarkers[currentMap] = data;
 		}
 
 		renderMapMarkers();
@@ -1288,10 +1254,14 @@ async function importWaypoints() {
 }
 
 async function exportWaypoints() {
-	const mapMarkers = markers[currentMap] || [];
+	const mapMarkers = userMarkers[currentMap] || [];
 
 	if (mapMarkers.length === 0) {
-		showStatus(ioStatus, 'No markers to export', 'error');
+		showStatus(
+			ioStatus,
+			'No custom markers to export (presets are built-in)',
+			'error'
+		);
 		return;
 	}
 
@@ -1300,7 +1270,7 @@ async function exportWaypoints() {
 		mapName: currentMap,
 		mapDisplayName: mapSelect.options[mapSelect.selectedIndex].text,
 		waypointCount: mapMarkers.length,
-		categories: categories,
+		categories: getCategories(),
 		waypoints: mapMarkers,
 	};
 
@@ -1318,62 +1288,22 @@ async function exportWaypoints() {
 	}
 }
 
-function loadMapPresets() {
-	const presets = presetLocations[currentMap];
-
-	if (!presets) {
-		showStatus(ioStatus, `No presets available for this map`, 'info');
-		return;
-	}
-
-	// Initialize markers array for current map if needed
-	if (!markers[currentMap]) {
-		markers[currentMap] = [];
-	}
-
-	let addedCount = 0;
-
-	// Add all preset categories
-	Object.values(presets).forEach((categoryMarkers) => {
-		categoryMarkers.forEach((preset) => {
-			// Check if marker already exists at this location
-			const exists = markers[currentMap].some(
-				(m) =>
-					Math.abs(m.lat - preset.lat) < 1 &&
-					Math.abs(m.lon - preset.lon) < 1 &&
-					m.name === preset.name
-			);
-
-			if (!exists) {
-				markers[currentMap].push({
-					name: preset.name,
-					category: preset.category,
-					lat: preset.lat,
-					lon: preset.lon,
-					createdAt: new Date().toISOString(),
-					isPreset: true,
-				});
-				addedCount++;
-			}
-		});
-	});
-
-	renderMapMarkers();
-	renderWaypoints();
-	renderCategories();
-	saveState();
-
-	showStatus(ioStatus, `Added ${addedCount} preset markers`, 'success');
-}
-
 // ===========================================
 // STATE PERSISTENCE
 // ===========================================
 function saveState() {
+	// Convert Sets to arrays for JSON serialization
+	const hiddenMarkersForSave = {};
+	Object.keys(hiddenMarkers).forEach((mapName) => {
+		hiddenMarkersForSave[mapName] = Array.from(hiddenMarkers[mapName]);
+	});
+
 	const state = {
 		currentMap,
-		markers,
-		categories,
+		userMarkers,
+		mapCategories,
+		presetOverrides,
+		hiddenMarkers: hiddenMarkersForSave,
 	};
 	localStorage.setItem('arkLocatorState', JSON.stringify(state));
 }
@@ -1383,10 +1313,24 @@ function loadState() {
 		const saved = localStorage.getItem('arkLocatorState');
 		if (saved) {
 			const state = JSON.parse(saved);
-			currentMap = state.currentMap || 'island';
-			markers = state.markers || {};
-			if (state.categories && state.categories.length > 0) {
-				categories = state.categories;
+			currentMap = state.currentMap || 'lost-colony';
+			// Support both old 'markers' key and new 'userMarkers' key for backward compatibility
+			userMarkers = state.userMarkers || state.markers || {};
+			// Load per-map category overrides
+			if (state.mapCategories) {
+				mapCategories = state.mapCategories;
+			}
+			// Load preset marker overrides
+			if (state.presetOverrides) {
+				presetOverrides = state.presetOverrides;
+			}
+			// Load hidden markers and convert arrays back to Sets
+			if (state.hiddenMarkers) {
+				Object.keys(state.hiddenMarkers).forEach((mapName) => {
+					hiddenMarkers[mapName] = new Set(
+						state.hiddenMarkers[mapName]
+					);
+				});
 			}
 			mapSelect.value = currentMap;
 		}

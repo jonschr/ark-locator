@@ -1,0 +1,22 @@
+{
+	"obelisks": [
+		{
+			"name": "Red Obelisk",
+			"lat": 22.0,
+			"lon": 68.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Blue Obelisk",
+			"lat": 77.0,
+			"lon": 75.0,
+			"category": "obelisks"
+		},
+		{
+			"name": "Green Obelisk",
+			"lat": 27.0,
+			"lon": 22.0,
+			"category": "obelisks"
+		}
+	]
+}

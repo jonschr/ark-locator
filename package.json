@@ -4,7 +4,8 @@
 	"description": "Ark Locator Electron App",
 	"main": "main.js",
 	"scripts": {
-		"start": "electron ."
+		"start": "electron .",
+		"restart": "pkill -f 'electron.*ark-locator' 2>/dev/null; sleep 1; electron ."
 	},
 	"keywords": [],
 	"author": "",

@@ -1,4 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const {
+	app,
+	BrowserWindow,
+	ipcMain,
+	dialog,
+	nativeImage,
+} = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -49,6 +55,7 @@ function createWindow() {
 		height: 900,
 		minWidth: 900,
 		minHeight: 600,
+		title: 'ARK Locator',
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false,
@@ -61,6 +68,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+	// Set dock icon on macOS
+	if (process.platform === 'darwin') {
+		const iconPath = path.join(__dirname, 'assets', 'icons', 'icon.png');
+		if (fs.existsSync(iconPath)) {
+			const icon = nativeImage.createFromPath(iconPath);
+			app.dock.setIcon(icon);
+		}
+	}
+
 	createWindow();
 
 	app.on('activate', () => {
@@ -146,4 +162,10 @@ ipcMain.handle('export-to-desktop', (event, data, filename) => {
 // Get desktop path
 ipcMain.handle('get-desktop-path', () => {
 	return path.join(os.homedir(), 'Desktop');
+});
+
+// Restart the app
+ipcMain.on('restart-app', () => {
+	app.relaunch();
+	app.exit(0);
 });
