@@ -694,33 +694,29 @@ function zoomMap(factor, mouseX = null, mouseY = null) {
 	const minScale = getMinScale();
 
 	if (newScale >= minScale && newScale <= 10) {
-		// If mouse position is provided, zoom towards that point
+		// If mouse position is provided, center zoom on cursor
 		if (mouseX !== null && mouseY !== null) {
 			const rect = mapViewport.getBoundingClientRect();
 			const centerX = rect.width / 2;
 			const centerY = rect.height / 2;
 
-			// mouseX and mouseY are already relative to mapViewport (offsetX/offsetY)
-			const mouseRelX = mouseX - centerX;
-			const mouseRelY = mouseY - centerY;
-
-			// Adjust offset to center the zoom on the cursor position
-			mapOffsetX = mapOffsetX * factor - mouseRelX * factor;
-			mapOffsetY = mapOffsetY * factor - mouseRelY * factor;
+			// Center the zoom on the cursor position
+			mapOffsetX = mouseX - centerX;
+			mapOffsetY = mouseY - centerY;
 		} else {
 			// Zoom to center - scale the offset to keep center fixed
 			mapOffsetX *= factor;
 			mapOffsetY *= factor;
 		}
 
-		// Clamp offset to keep the image visible within the viewport
+		// Clamp offset to keep image visible within viewport
 		const rect = mapViewport.getBoundingClientRect();
 		const centerX = rect.width / 2;
 		const centerY = rect.height / 2;
 		const imgWidth = mapImage.naturalWidth;
 		const imgHeight = mapImage.naturalHeight;
-		const scaledHalfWidth = imgWidth / 2 * newScale;
-		const scaledHalfHeight = imgHeight / 2 * newScale;
+		const scaledHalfWidth = (imgWidth / 2) * newScale;
+		const scaledHalfHeight = (imgHeight / 2) * newScale;
 		const minOffsetX = -centerX + scaledHalfWidth;
 		const maxOffsetX = rect.width - centerX - scaledHalfWidth;
 		const minOffsetY = -centerY + scaledHalfHeight;
